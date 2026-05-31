@@ -1,0 +1,167 @@
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  margin-top: 20px;
+}
+
+.navbar {
+  background-color: #f2d3a7; 
+}
+
+.navbar-brand {
+  font-weight: bold;
+  font-style: italic;
+  font-size: 30px; 
+  text-align: center;
+  color: #050403;
+}
+
+.navbar-brand:hover {
+  color: white !important;
+}
+
+.nav-link {
+  color: #050403 !important;
+  font-size: 25px; 
+}
+
+.nav-link:hover {
+  color: white !important;
+}
+
+.navbar-toggler {
+  border: 2px solid black;
+}
+
+.hero-section {
+  height: 90vh;
+  background-image: url('../public/images/lebanon.jpeg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  margin-bottom: 50px;
+}
+
+.hero-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  color: white;
+}
+
+.hero-img {
+  height: 700px;
+  width: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.card {
+  border: none;
+  border-radius: 15px;
+  overflow: hidden;
+  transition: 0.3s ease;
+}
+
+.card:hover {
+  transform: scale(1.03); 
+}
+
+.card-img {
+  height: 500px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.view-btn {
+  background-color: #45acd1; 
+  color: white;
+  border: none;
+  padding: 10px 25px;
+  border-radius: 10px;
+  transition: 0.3s ease;
+}
+
+.view-btn:hover {
+  background-color: #4aa8d8;
+  transform: scale(1.05);
+}
+
+.custom-btn {
+  background-color: #0e83b6; 
+  color: white;
+  border: none;
+  transition: background 0.3s ease;
+}
+
+footer {
+  margin-top: auto;
+}
+
+.footer {
+  background-color: #45acd1;
+  padding: 15px;
+  font-size: 14px;
+}
+
+.footer h4 {
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.footer p,
+.footer a {
+  font-size: 16px;
+}
+
+
+.card {
+  position: relative; 
+}
+
+.fav-btn {
+  position: absolute;
+  top: 15px; 
+  right: 15px; 
+  width: 40px;
+  height: 40px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 10; 
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); 
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.fav-btn:hover {
+  transform: scale(1.1);
+  background-color: #ffffff;
+}
+
+.fav-btn .heart-icon {
+  font-size: 20px;
+  color: #dc3545; 
+  transition: color 0.2s ease;
+}
