@@ -47,5 +47,5 @@ Follow these steps to run the project locally on your machine:
 • Favorite Page 
 
 ![Home Page](./public/images/home.png)
-![Destinations Page](./public/images/destinations.png)
+![Destinations Page](./screenshots/images/destinations.png)
 ![Favorites](./public/images/favorites.png)
