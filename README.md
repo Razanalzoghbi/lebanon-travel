@@ -32,6 +32,8 @@ Follow these steps to run the project locally on your machine:
 
 3.	Run the development server:
      npm start
+4. Open 
+     http://localhost:3000
 
 🛠️ Technologies Used
 • Frontend Library: React.js
