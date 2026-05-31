@@ -1,4 +1,3 @@
-
 import React from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -14,7 +13,7 @@ function ContactPage() {
           If you have any questions about traveling in Lebanon, feel free to contact us!
         </p>
 
-        <div className="row g-5 align-items-center">
+        <div className="row g-5 align-items-center justify-content-center">
           
           <div className="col-lg-6">
             <div className="p-4 border rounded shadow-sm bg-white">
@@ -43,30 +42,6 @@ function ContactPage() {
                   Send Message
                 </button>
               </form>
-            </div>
-          </div>
-
-          <div className="col-lg-6">
-            <div className="p-4 rounded text-white" style={{ backgroundColor: '#0979a8' }}>
-              <h4 className="mb-4 fw-bold" style={{color: '#f2d3a7' }}> Contact Information </h4>
-              <p className="mb-4">
-                We are here to help you plan your perfect trip across Lebanon. Drop us a line or call anytime!
-              </p>
-              
-              <div className="mb-3">
-                <h5>📍 Location</h5>
-                <p className="ms-4 text-light">Beirut, Lebanon</p>
-              </div>
-
-              <div className="mb-3">
-                <h5>📞 Phone Number</h5>
-                <p className="ms-4 text-light">+961 71 558 059</p>
-              </div>
-
-              <div className="mb-0">
-                <h5>✉️ Email Address</h5>
-                <p className="ms-4 text-light">lebanontravel@gmail.com</p>
-              </div>
             </div>
           </div>
 
