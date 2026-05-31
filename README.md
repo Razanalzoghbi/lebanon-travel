@@ -51,7 +51,7 @@ Follow these steps to run the project locally on your machine:
 ## 📸 Screenshots of the UI
  * Home Page & Destinations
  * Favorite Page
-```
+ 
 ![Home Page](./screenshots/home.png)
 ![Destinations Page](./screenshots/destinations.png)
 ![Favorites Page](./screenshots/favorites.png)
