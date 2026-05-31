@@ -3,8 +3,8 @@
 A fully responsive React.js web application designed to explore the beautiful destinations and attractions in Lebanon. Users can browse regions, search for specific places, and save their favorite spots using local storage.
 
 ## 🚀 Live Demo
-You can view the live project deployed on Vercel here:
-👉 https://lebanon-travel.vercel.app/
+You can view the live project deployed on Vercel here:  
+👉 [https://lebanon-travel.vercel.app/](https://lebanon-travel.vercel.app/)
 
 ---
 
@@ -24,28 +24,34 @@ Follow these steps to run the project locally on your machine:
 ```bash
    git clone [https://github.com/Razanalzoghbi/lebanon-travel.git](https://github.com/Razanalzoghbi/lebanon-travel.git)
 
-   1.	Navigate to the project folder:
+```
+ 2. **Navigate to the project folder:**
+```bash
    cd lebanon-travel
 
-2.  Install dependencies:
+```
+ 3. **Install dependencies:**
+```bash
    npm install
 
-3.	Run the development server:
-     npm start
-4. Open 
-     http://localhost:3000
+```
+ 4. **Run the development server:**
+```bash
+   npm start
 
-🛠️ Technologies Used
-• Frontend Library: React.js
-• Routing: React Router DOM
-• Styling: CSS3 & Bootstrap 5
-• State Management: React Hooks (useState, useEffect)
-• Storage: Web Storage API (localStorage)
-
-📸 Screenshots of the UI
-• Home Page & Destinations
-• Favorite Page 
-
+```
+ 5. **Open the application in your browser:**
+   Open http://localhost:3000 to view it in the browser.
+## 🛠️ Technologies Used
+ * **Frontend Library:** React.js
+ * **Routing:** React Router DOM
+ * **Styling:** CSS3 & Bootstrap 5
+ * **State Management:** React Hooks (useState, useEffect)
+ * **Storage:** Web Storage API (localStorage)
+## 📸 Screenshots of the UI
+ * Home Page & Destinations
+ * Favorite Page
+```
 ![Home Page](./screenshots/home.png)
 ![Destinations Page](./screenshots/destinations.png)
-![Favorites](./screenshots/favorites.png)
+![Favorites Page](./screenshots/favorites.png)
