@@ -15,6 +15,31 @@ function AdminDashboardPage() {
   const user = getUser();
   const [users, setUsers] = useState(null);
   const [error, setError] = useState("");
+  const [claims, setClaims] = useState([]);
+
+  const loadClaims = useCallback(() => {
+    fetch(`${API}/api/admin/claims`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setClaims);
+  }, []);
+
+  const decideClaim = async (id, status) => {
+    const res = await fetch(`${API}/api/admin/claims/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      window.alert(data.message);
+    }
+    loadClaims();
+  };
 
   const load = useCallback(() => {
     fetch(`${API}/api/admin/users`, {
@@ -29,8 +54,11 @@ function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (user && user.role === "admin") load();
-  }, [load]); // eslint-disable-line
+    if (user && user.role === "admin") {
+      load();
+      loadClaims();
+    }
+  }, [load, loadClaims]); // eslint-disable-line
 
   const setStatus = async (id, status) => {
     await fetch(`${API}/api/admin/users/${id}/status`, {
@@ -87,6 +115,31 @@ function AdminDashboardPage() {
                       Approve
                     </button>
                     <button className="btn btn-outline-danger btn-sm" onClick={() => setStatus(o.id, "blocked")}>
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <h4 className="mt-5">Place claims waiting for approval ({claims.length})</h4>
+            {claims.length === 0 && <p className="text-muted">No claims right now.</p>}
+            {claims.map((c) => (
+              <div key={c.id} className="card mb-2 shadow-sm">
+                <div className="card-body d-flex flex-wrap justify-content-between align-items-center">
+                  <div>
+                    <strong>{c.place_name}</strong>{" "}
+                    <span className="badge bg-secondary text-capitalize">{c.place_type}</span>
+                    <div className="text-muted small">
+                      Requested by {c.business_name || c.user_name} · {c.email}
+                      {c.phone && ` · ${c.phone}`}
+                    </div>
+                  </div>
+                  <div>
+                    <button className="btn btn-success btn-sm me-2" onClick={() => decideClaim(c.id, "approved")}>
+                      Approve
+                    </button>
+                    <button className="btn btn-outline-danger btn-sm" onClick={() => decideClaim(c.id, "rejected")}>
                       Reject
                     </button>
                   </div>

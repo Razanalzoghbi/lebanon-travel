@@ -48,6 +48,18 @@ function PlaceDetailsPage() {
     if (res.ok) setBk({ booking_date: "", booking_time: "", guests: 2, notes: "" });
   };
 
+  const [claimMsg, setClaimMsg] = useState("");
+
+  const claimPlace = async () => {
+    if (!window.confirm("Send a request to become the owner of this place?")) return;
+    const res = await fetch(`${API}/api/places/${id}/claim`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    const data = await res.json();
+    setClaimMsg(data.message);
+  };
+
   const load = useCallback(() => {
     fetch(`${API}/api/places/${id}`)
       .then((res) => {
@@ -133,6 +145,15 @@ function PlaceDetailsPage() {
                 {place.address && <p className="mb-1">📍 {place.address}</p>}
                 {place.phone && <p className="mb-1">📞 {place.phone}</p>}
                 {place.opening_hours && <p className="mb-1">🕒 {place.opening_hours}</p>}
+
+                {user && user.role === "owner" && !place.claimed && (
+                  <div className="mt-3">
+                    <button className="btn btn-outline-primary btn-sm" onClick={claimPlace}>
+                      Claim this business
+                    </button>
+                    {claimMsg && <div className="small mt-1">{claimMsg}</div>}
+                  </div>
+                )}
 
                 {place.type !== "attraction" && (
                   <div className="border rounded p-3 mt-4 bg-white shadow-sm">

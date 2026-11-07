@@ -166,7 +166,7 @@ app.get("/api/me", requireAuth, async (req, res) => {
 app.get("/api/places/:id", async (req, res) => {
   const [rows] = await db.query(
     `SELECT p.id, p.name, p.type, p.description, p.image, p.address, p.phone,
-            p.opening_hours, p.price_range,
+            p.opening_hours, p.price_range, (p.owner_id IS NOT NULL) AS claimed,
             d.name AS destination_name, d.slug AS destination_slug,
             pr.avg_rating, pr.review_count
      FROM places p
@@ -333,6 +333,81 @@ app.patch("/api/admin/users/:id/status", requireAuth, requireRole("admin"), asyn
     return res.status(404).json({ message: "User not found" });
   }
   res.json({ message: "Updated" });
+});
+
+
+// ---------------------- CLAIMS (owner asks to own an existing place) ----------------------
+
+app.post("/api/places/:id/claim", requireAuth, requireRole("owner"), async (req, res) => {
+  const [place] = await db.query(
+    "SELECT id, owner_id FROM places WHERE id = ? AND status = 'approved'",
+    [req.params.id]
+  );
+  if (place.length === 0) return res.status(404).json({ message: "Place not found" });
+  if (place[0].owner_id) {
+    return res.status(400).json({ message: "This place already has an owner" });
+  }
+  try {
+    await db.query("INSERT INTO place_claims (user_id, place_id) VALUES (?, ?)", [
+      req.user.id,
+      req.params.id,
+    ]);
+  } catch (err) {
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ message: "You already sent a claim for this place" });
+    }
+    throw err;
+  }
+  res.status(201).json({ message: "Claim sent. The admin will review it." });
+});
+
+// Admin: list claims (default: pending)
+app.get("/api/admin/claims", requireAuth, requireRole("admin"), async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT c.id, c.status, c.created_at,
+            u.name AS user_name, u.email, u.business_name, u.phone,
+            p.id AS place_id, p.name AS place_name, p.type AS place_type
+     FROM place_claims c
+     JOIN users u ON u.id = c.user_id
+     JOIN places p ON p.id = c.place_id
+     WHERE c.status = ?
+     ORDER BY c.created_at`,
+    [req.query.status || "pending"]
+  );
+  res.json(rows);
+});
+
+// Admin: approve or reject a claim
+app.patch("/api/admin/claims/:id", requireAuth, requireRole("admin"), async (req, res) => {
+  const { status } = req.body;
+  if (!["approved", "rejected"].includes(status)) {
+    return res.status(400).json({ message: "Status must be approved or rejected" });
+  }
+  const [claims] = await db.query(
+    "SELECT * FROM place_claims WHERE id = ? AND status = 'pending'",
+    [req.params.id]
+  );
+  if (claims.length === 0) return res.status(404).json({ message: "Claim not found" });
+  const claim = claims[0];
+
+  if (status === "rejected") {
+    await db.query("UPDATE place_claims SET status = 'rejected' WHERE id = ?", [claim.id]);
+    return res.json({ message: "Claim rejected" });
+  }
+
+  const [result] = await db.query(
+    "UPDATE places SET owner_id = ? WHERE id = ? AND owner_id IS NULL",
+    [claim.user_id, claim.place_id]
+  );
+  if (result.affectedRows === 0) {
+    return res.status(400).json({ message: "This place already has an owner" });
+  }
+  await db.query("UPDATE place_claims SET status = 'approved' WHERE id = ?", [claim.id]);
+  await db.query(
+    "UPDATE place_claims SET status = 'rejected' WHERE place_id = ? AND status = 'pending'",
+    [claim.place_id]
+  );
+  res.json({ message: "Claim approved" });
 });
 
 const PORT = process.env.PORT || 5000;
