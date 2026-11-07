@@ -77,6 +77,11 @@ function DestinationPage() {
                                 ? `★ ${p.avg_rating} (${p.review_count})`
                                 : "No reviews yet"}
                             </small>
+                            <div className="mt-2">
+                              <Link to={`/places/${p.id}`} className="btn custom-btn btn-sm">
+                                {p.type === "attraction" ? "View details" : "Book now"}
+                              </Link>
+                            </div>
                           </div>
                         </div>
                       </div>

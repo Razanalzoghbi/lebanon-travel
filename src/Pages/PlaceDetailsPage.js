@@ -26,6 +26,28 @@ function PlaceDetailsPage() {
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("success");
 
+  // booking form
+  const [bk, setBk] = useState({ booking_date: "", booking_time: "", guests: 2, notes: "" });
+  const [bkMsg, setBkMsg] = useState("");
+  const [bkType, setBkType] = useState("success");
+
+  const submitBooking = async (e) => {
+    e.preventDefault();
+    setBkMsg("");
+    const res = await fetch(`${API}/api/bookings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify({ ...bk, place_id: place.id }),
+    });
+    const data = await res.json();
+    setBkType(res.ok ? "success" : "danger");
+    setBkMsg(data.message);
+    if (res.ok) setBk({ booking_date: "", booking_time: "", guests: 2, notes: "" });
+  };
+
   const load = useCallback(() => {
     fetch(`${API}/api/places/${id}`)
       .then((res) => {
@@ -111,6 +133,86 @@ function PlaceDetailsPage() {
                 {place.address && <p className="mb-1">📍 {place.address}</p>}
                 {place.phone && <p className="mb-1">📞 {place.phone}</p>}
                 {place.opening_hours && <p className="mb-1">🕒 {place.opening_hours}</p>}
+
+                {place.type !== "attraction" && (
+                  <div className="border rounded p-3 mt-4 bg-white shadow-sm">
+                    <h5>{place.type === "hotel" ? "Book a room" : "Book a table"}</h5>
+
+                    {!user && (
+                      <p className="mb-0">
+                        <Link to="/login">Login</Link> to make a booking.
+                      </p>
+                    )}
+                    {user && user.role !== "user" && (
+                      <p className="mb-0 text-muted">Only travelers can make bookings.</p>
+                    )}
+
+                    {user && user.role === "user" && (
+                      <form onSubmit={submitBooking}>
+                        {bkMsg && <div className={`alert alert-${bkType} py-2`}>{bkMsg}</div>}
+
+                        <div className="mb-2">
+                          <label className="form-label mb-1">
+                            {place.type === "hotel" ? "Check-in date" : "Date"}
+                          </label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            required
+                            min={new Date().toISOString().slice(0, 10)}
+                            value={bk.booking_date}
+                            onChange={(e) => setBk({ ...bk, booking_date: e.target.value })}
+                          />
+                        </div>
+
+                        {place.type !== "hotel" && (
+                          <div className="mb-2">
+                            <label className="form-label mb-1">Time</label>
+                            <input
+                              type="time"
+                              className="form-control"
+                              required
+                              value={bk.booking_time}
+                              onChange={(e) => setBk({ ...bk, booking_time: e.target.value })}
+                            />
+                          </div>
+                        )}
+
+                        <div className="mb-2">
+                          <label className="form-label mb-1">Guests</label>
+                          <input
+                            type="number"
+                            className="form-control"
+                            min="1"
+                            max="50"
+                            required
+                            value={bk.guests}
+                            onChange={(e) => setBk({ ...bk, guests: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="mb-3">
+                          <label className="form-label mb-1">
+                            Notes {place.type === "hotel" && "(number of nights, room type...)"}
+                          </label>
+                          <textarea
+                            className="form-control"
+                            rows="2"
+                            value={bk.notes}
+                            onChange={(e) => setBk({ ...bk, notes: e.target.value })}
+                          />
+                        </div>
+
+                        <button type="submit" className="btn custom-btn w-100">
+                          Send booking request
+                        </button>
+                        <small className="d-block mt-2">
+                          <Link to="/my-bookings">See my bookings</Link>
+                        </small>
+                      </form>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

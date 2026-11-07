@@ -219,5 +219,121 @@ app.post("/api/places/:id/reviews", requireAuth, async (req, res) => {
   res.status(201).json({ message: "Thank you for your review!" });
 });
 
+
+// ---------------------- BOOKINGS ----------------------
+
+// Create a booking (restaurants, cafes and hotels only)
+app.post("/api/bookings", requireAuth, async (req, res) => {
+  if (req.user.role !== "user") {
+    return res.status(403).json({ message: "Only travelers can make bookings" });
+  }
+  const { place_id, booking_date, booking_time, notes } = req.body;
+  const guests = parseInt(req.body.guests, 10) || 1;
+
+  if (!place_id || !booking_date) {
+    return res.status(400).json({ message: "Place and date are required" });
+  }
+  if (guests < 1 || guests > 50) {
+    return res.status(400).json({ message: "Guests must be between 1 and 50" });
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (booking_date < today) {
+    return res.status(400).json({ message: "The date cannot be in the past" });
+  }
+
+  const [place] = await db.query(
+    "SELECT id, type FROM places WHERE id = ? AND status = 'approved'",
+    [place_id]
+  );
+  if (place.length === 0) return res.status(404).json({ message: "Place not found" });
+  if (place[0].type === "attraction") {
+    return res.status(400).json({ message: "Attractions cannot be booked" });
+  }
+
+  await db.query(
+    `INSERT INTO bookings (user_id, place_id, booking_date, booking_time, guests, notes)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [req.user.id, place_id, booking_date, booking_time || null, guests, notes || null]
+  );
+  res.status(201).json({ message: "Booking request sent! The place will confirm it soon." });
+});
+
+// My bookings
+app.get("/api/bookings/mine", requireAuth, async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT b.id, b.booking_date, b.booking_time, b.guests, b.notes, b.status,
+            p.id AS place_id, p.name AS place_name, p.type AS place_type, p.image AS place_image
+     FROM bookings b
+     JOIN places p ON p.id = b.place_id
+     WHERE b.user_id = ?
+     ORDER BY b.booking_date DESC, b.id DESC`,
+    [req.user.id]
+  );
+  res.json(rows);
+});
+
+// Cancel my booking
+app.patch("/api/bookings/:id/cancel", requireAuth, async (req, res) => {
+  const [result] = await db.query(
+    `UPDATE bookings SET status = 'cancelled'
+     WHERE id = ? AND user_id = ? AND status IN ('pending', 'confirmed')`,
+    [req.params.id, req.user.id]
+  );
+  if (result.affectedRows === 0) {
+    return res.status(400).json({ message: "This booking cannot be cancelled" });
+  }
+  res.json({ message: "Booking cancelled" });
+});
+
+
+// ---------------------- ADMIN ----------------------
+
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ message: "You are not allowed to do this" });
+    }
+    next();
+  };
+}
+
+// List users (optional filters: ?role=owner&status=pending)
+app.get("/api/admin/users", requireAuth, requireRole("admin"), async (req, res) => {
+  const where = [];
+  const params = [];
+  if (req.query.role) {
+    where.push("role = ?");
+    params.push(req.query.role);
+  }
+  if (req.query.status) {
+    where.push("status = ?");
+    params.push(req.query.status);
+  }
+  const [rows] = await db.query(
+    `SELECT id, name, email, role, status, business_name, phone, created_at
+     FROM users
+     ${where.length ? "WHERE " + where.join(" AND ") : ""}
+     ORDER BY created_at DESC`,
+    params
+  );
+  res.json(rows);
+});
+
+// Approve / block / unblock a user or owner (admins cannot be changed)
+app.patch("/api/admin/users/:id/status", requireAuth, requireRole("admin"), async (req, res) => {
+  const { status } = req.body;
+  if (!["active", "blocked"].includes(status)) {
+    return res.status(400).json({ message: "Status must be active or blocked" });
+  }
+  const [result] = await db.query(
+    "UPDATE users SET status = ? WHERE id = ? AND role <> 'admin'",
+    [status, req.params.id]
+  );
+  if (result.affectedRows === 0) {
+    return res.status(404).json({ message: "User not found" });
+  }
+  res.json({ message: "Updated" });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

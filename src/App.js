@@ -8,6 +8,8 @@ import DestinationPage from "./Pages/DestinationPage";
 import LoginPage from "./Pages/LoginPage";
 import RegisterPage from "./Pages/RegisterPage";
 import PlaceDetailsPage from "./Pages/PlaceDetailsPage";
+import MyBookingsPage from "./Pages/MyBookingsPage";
+import AdminDashboardPage from "./Pages/AdminDashboardPage";
 
 import "./App.css";
 
@@ -44,6 +46,8 @@ function App() {
          <Route path="/login" element={<LoginPage />} />
          <Route path="/register" element={<RegisterPage />} />
          <Route path="/places/:id" element={<PlaceDetailsPage />} />
+         <Route path="/my-bookings" element={<MyBookingsPage />} />
+         <Route path="/admin" element={<AdminDashboardPage/>} />
          <Route path="/:slug" element={<DestinationPage />} />
       </Routes>
 

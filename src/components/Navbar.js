@@ -45,6 +45,16 @@ function Navbar() {
 
             {user ? (
               <>
+                {user.role === "admin" && (
+                  <li className="nav-item">
+                    <Link className="nav-link" to="/admin">Dashboard</Link>
+                  </li>
+                )}
+                {user.role === "user" && (
+                  <li className="nav-item">
+                    <Link className="nav-link" to="/my-bookings">My Bookings</Link>
+                  </li>
+                )}
                 <li className="nav-item">
                   <span className="nav-link fw-bold">Hi, {user.name}</span>
                 </li>
