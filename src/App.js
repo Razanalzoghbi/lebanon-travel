@@ -5,6 +5,8 @@ import AboutPage from "./Pages/AboutPage";
 import ContactPage from "./Pages/ContactPage";
 import FavoritesPage from "./Pages/FavoritesPage";
 import DestinationPage from "./Pages/DestinationPage";
+import LoginPage from "./Pages/LoginPage";
+import RegisterPage from "./Pages/RegisterPage";
 
 import "./App.css";
 
@@ -38,7 +40,8 @@ function App() {
           path="/favorites"
           element={<FavoritesPage />}
         />
-        
+        <Route path="/login" element={<LoginPage />} />
+         <Route path="/register" element={<RegisterPage />} />
          <Route path="/:slug" element={<DestinationPage />} />
       </Routes>
 
