@@ -159,5 +159,65 @@ app.get("/api/me", requireAuth, async (req, res) => {
   res.json(rows[0]);
 });
 
+
+// ---------------------- PLACES + REVIEWS ----------------------
+
+// One place with its images, rating and reviews
+app.get("/api/places/:id", async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT p.id, p.name, p.type, p.description, p.image, p.address, p.phone,
+            p.opening_hours, p.price_range,
+            d.name AS destination_name, d.slug AS destination_slug,
+            pr.avg_rating, pr.review_count
+     FROM places p
+     LEFT JOIN destinations d ON d.id = p.destination_id
+     JOIN place_ratings pr ON pr.place_id = p.id
+     WHERE p.id = ? AND p.status = 'approved'`,
+    [req.params.id]
+  );
+  if (rows.length === 0) return res.status(404).json({ message: "Place not found" });
+
+  const [images] = await db.query(
+    "SELECT image_url FROM place_images WHERE place_id = ? ORDER BY sort_order",
+    [req.params.id]
+  );
+  const [reviews] = await db.query(
+    `SELECT r.id, r.rating, r.comment, r.created_at, u.name AS user_name
+     FROM reviews r
+     JOIN users u ON u.id = r.user_id
+     WHERE r.place_id = ?
+     ORDER BY r.created_at DESC`,
+    [req.params.id]
+  );
+
+  res.json({ ...rows[0], images: images.map((i) => i.image_url), reviews });
+});
+
+// Add (or update) my review for a place. One review per user per place.
+app.post("/api/places/:id/reviews", requireAuth, async (req, res) => {
+  if (req.user.role !== "user") {
+    return res.status(403).json({ message: "Only travelers can write reviews" });
+  }
+  const rating = parseInt(req.body.rating, 10);
+  const comment = (req.body.comment || "").trim();
+  if (!(rating >= 1 && rating <= 5)) {
+    return res.status(400).json({ message: "Rating must be from 1 to 5" });
+  }
+
+  const [place] = await db.query(
+    "SELECT id FROM places WHERE id = ? AND status = 'approved'",
+    [req.params.id]
+  );
+  if (place.length === 0) return res.status(404).json({ message: "Place not found" });
+
+  await db.query(
+    `INSERT INTO reviews (user_id, place_id, rating, comment)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE rating = VALUES(rating), comment = VALUES(comment), created_at = NOW()`,
+    [req.user.id, req.params.id, rating, comment || null]
+  );
+  res.status(201).json({ message: "Thank you for your review!" });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

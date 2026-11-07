@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import FavoriteButton from "../components/FavoriteButton";
@@ -63,9 +63,15 @@ function DestinationPage() {
                       <div className="col-md-6" key={p.id}>
                         <div className="card mb-4">
                           <FavoriteButton item={{ title: p.name, image: p.image }} />
-                          <img src={p.image} className="img-fluid w-100 card-img" alt={p.name} />
+                          <Link to={`/places/${p.id}`}>
+                            <img src={p.image} className="img-fluid w-100 card-img" alt={p.name} />
+                          </Link>
                           <div className="card-body text-center">
-                            <h5>{p.name}</h5>
+                            <h5>
+                              <Link to={`/places/${p.id}`} className="text-dark text-decoration-none">
+                                {p.name}
+                              </Link>
+                            </h5>
                             <small className="text-muted">
                               {p.review_count > 0
                                 ? `★ ${p.avg_rating} (${p.review_count})`
