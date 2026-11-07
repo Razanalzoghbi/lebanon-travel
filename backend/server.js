@@ -410,5 +410,127 @@ app.patch("/api/admin/claims/:id", requireAuth, requireRole("admin"), async (req
   res.json({ message: "Claim approved" });
 });
 
+
+// ---------------------- OWNER ----------------------
+
+// My places (any status) with number of pending bookings
+app.get("/api/owner/places", requireAuth, requireRole("owner"), async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT p.id, p.name, p.type, p.image, p.status, d.name AS destination_name, p.area_name,
+            pr.avg_rating, pr.review_count,
+            (SELECT COUNT(*) FROM bookings b WHERE b.place_id = p.id AND b.status = 'pending') AS pending_bookings
+     FROM places p
+     LEFT JOIN destinations d ON d.id = p.destination_id
+     JOIN place_ratings pr ON pr.place_id = p.id
+     WHERE p.owner_id = ?
+     ORDER BY p.id DESC`,
+    [req.user.id]
+  );
+  res.json(rows);
+});
+
+// Add a new place (waits for admin approval)
+app.post("/api/owner/places", requireAuth, requireRole("owner"), async (req, res) => {
+  const b = req.body;
+  if (!b.name || !["restaurant", "cafe", "hotel", "attraction"].includes(b.type)) {
+    return res.status(400).json({ message: "Name and a valid type are required" });
+  }
+  const destinationId = b.destination_id ? parseInt(b.destination_id, 10) : null;
+  let lat = null;
+  let lng = null;
+  if (!destinationId) {
+    // a place outside the listed destinations needs its own location (used by Nearby Suggestions)
+    lat = parseFloat(b.latitude);
+    lng = parseFloat(b.longitude);
+    if (!b.area_name || isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({ message: "Area name, latitude and longitude are required for this location" });
+    }
+  }
+  await db.query(
+    `INSERT INTO places
+       (destination_id, owner_id, name, type, description, area_name, address, latitude, longitude,
+        phone, opening_hours, price_range, image, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+    [
+      destinationId,
+      req.user.id,
+      b.name.trim(),
+      b.type,
+      b.description || null,
+      b.area_name || null,
+      b.address || null,
+      lat,
+      lng,
+      b.phone || null,
+      b.opening_hours || null,
+      ["$", "$$", "$$$", "$$$$"].includes(b.price_range) ? b.price_range : null,
+      b.image || null,
+    ]
+  );
+  res.status(201).json({ message: "Place sent. It will appear after the admin approves it." });
+});
+
+// Bookings of my places
+app.get("/api/owner/bookings", requireAuth, requireRole("owner"), async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT b.id, b.booking_date, b.booking_time, b.guests, b.notes, b.status,
+            u.name AS user_name, u.email AS user_email, p.name AS place_name
+     FROM bookings b
+     JOIN places p ON p.id = b.place_id
+     JOIN users u ON u.id = b.user_id
+     WHERE p.owner_id = ?
+     ORDER BY FIELD(b.status, 'pending', 'confirmed', 'completed', 'rejected', 'cancelled'),
+              b.booking_date, b.id`,
+    [req.user.id]
+  );
+  res.json(rows);
+});
+
+// Confirm / reject / complete a booking of my place
+app.patch("/api/owner/bookings/:id", requireAuth, requireRole("owner"), async (req, res) => {
+  const { status } = req.body;
+  if (!["confirmed", "rejected", "completed"].includes(status)) {
+    return res.status(400).json({ message: "Invalid status" });
+  }
+  const [result] = await db.query(
+    `UPDATE bookings b
+     JOIN places p ON p.id = b.place_id
+     SET b.status = ?
+     WHERE b.id = ? AND p.owner_id = ? AND b.status IN ('pending', 'confirmed')`,
+    [status, req.params.id, req.user.id]
+  );
+  if (result.affectedRows === 0) {
+    return res.status(400).json({ message: "This booking cannot be changed" });
+  }
+  res.json({ message: "Updated" });
+});
+
+// Admin: places waiting for approval, and approve / reject
+app.get("/api/admin/places", requireAuth, requireRole("admin"), async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT p.id, p.name, p.type, p.description, p.image, p.address, p.area_name, p.created_at,
+            d.name AS destination_name, u.business_name, u.email AS owner_email
+     FROM places p
+     LEFT JOIN destinations d ON d.id = p.destination_id
+     LEFT JOIN users u ON u.id = p.owner_id
+     WHERE p.status = 'pending'
+     ORDER BY p.created_at`
+  );
+  res.json(rows);
+});
+
+app.patch("/api/admin/places/:id/status", requireAuth, requireRole("admin"), async (req, res) => {
+  const { status } = req.body;
+  if (!["approved", "rejected"].includes(status)) {
+    return res.status(400).json({ message: "Status must be approved or rejected" });
+  }
+  const [result] = await db.query(
+    "UPDATE places SET status = ? WHERE id = ? AND status = 'pending'",
+    [status, req.params.id]
+  );
+  if (result.affectedRows === 0) return res.status(404).json({ message: "Place not found" });
+  res.json({ message: "Updated" });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

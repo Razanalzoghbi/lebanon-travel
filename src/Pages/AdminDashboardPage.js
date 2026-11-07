@@ -16,6 +16,27 @@ function AdminDashboardPage() {
   const [users, setUsers] = useState(null);
   const [error, setError] = useState("");
   const [claims, setClaims] = useState([]);
+  const [newPlaces, setNewPlaces] = useState([]);
+
+  const loadPlaces = useCallback(() => {
+    fetch(`${API}/api/admin/places`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setNewPlaces);
+  }, []);
+
+  const decidePlace = async (id, status) => {
+    await fetch(`${API}/api/admin/places/${id}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    loadPlaces();
+  };
 
   const loadClaims = useCallback(() => {
     fetch(`${API}/api/admin/claims`, {
@@ -57,8 +78,9 @@ function AdminDashboardPage() {
     if (user && user.role === "admin") {
       load();
       loadClaims();
+      loadPlaces();
     }
-  }, [load, loadClaims]); // eslint-disable-line
+  }, [load, loadClaims, loadPlaces]); // eslint-disable-line
 
   const setStatus = async (id, status) => {
     await fetch(`${API}/api/admin/users/${id}/status`, {
@@ -115,6 +137,31 @@ function AdminDashboardPage() {
                       Approve
                     </button>
                     <button className="btn btn-outline-danger btn-sm" onClick={() => setStatus(o.id, "blocked")}>
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <h4 className="mt-5">New places waiting for approval ({newPlaces.length})</h4>
+            {newPlaces.length === 0 && <p className="text-muted">No new places right now.</p>}
+            {newPlaces.map((p) => (
+              <div key={p.id} className="card mb-2 shadow-sm">
+                <div className="card-body d-flex flex-wrap justify-content-between align-items-center">
+                  <div>
+                    <strong>{p.name}</strong>{" "}
+                    <span className="badge bg-secondary text-capitalize">{p.type}</span>
+                    <div className="text-muted small">
+                      {p.destination_name || p.area_name} · by {p.business_name || p.owner_email}
+                    </div>
+                    {p.description && <div className="small">{p.description}</div>}
+                  </div>
+                  <div>
+                    <button className="btn btn-success btn-sm me-2" onClick={() => decidePlace(p.id, "approved")}>
+                      Approve
+                    </button>
+                    <button className="btn btn-outline-danger btn-sm" onClick={() => decidePlace(p.id, "rejected")}>
                       Reject
                     </button>
                   </div>

@@ -50,6 +50,11 @@ function Navbar() {
                     <Link className="nav-link" to="/admin">Dashboard</Link>
                   </li>
                 )}
+                {user.role === "owner" && (
+                  <li className="nav-item">
+                    <Link className="nav-link" to="/owner">Dashboard</Link>
+                  </li>
+                )}
                 {user.role === "user" && (
                   <li className="nav-item">
                     <Link className="nav-link" to="/my-bookings">My Bookings</Link>
