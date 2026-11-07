@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import FavoriteButton from "../components/FavoriteButton";
+import PlaceImage from "../components/PlaceImage";
 import { API, getUser, getToken } from "../auth";
 
 function Stars({ value }) {
@@ -108,15 +109,17 @@ function PlaceDetailsPage() {
 
         {place && (
           <>
-            {place.destination_slug && (
+            {place.destination_slug ? (
               <Link to={`/${place.destination_slug}`}>← Back to {place.destination_name}</Link>
+            ) : (
+              <Link to="/destinations">← Back to destinations</Link>
             )}
 
             <div className="row mt-3 g-4">
               <div className="col-lg-7">
                 <div className="card position-relative">
                   <FavoriteButton item={{ title: place.name, image: place.image }} />
-                  <img src={place.image} className="img-fluid w-100 card-img" alt={place.name} />
+                  <PlaceImage src={place.image} alt={place.name} height={300} />
                 </div>
 
                 {place.images.length > 0 && (

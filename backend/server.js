@@ -532,5 +532,43 @@ app.patch("/api/admin/places/:id/status", requireAuth, requireRole("admin"), asy
   res.json({ message: "Updated" });
 });
 
+
+// ---------------------- NEARBY SUGGESTIONS ----------------------
+
+// Places that do not belong to a destination, within 30 km, nearest first
+app.get("/api/destinations/:slug/nearby", async (req, res) => {
+  const [dest] = await db.query(
+    "SELECT id, name, slug, latitude, longitude FROM destinations WHERE slug = ?",
+    [req.params.slug]
+  );
+  if (dest.length === 0) return res.status(404).json({ message: "Destination not found" });
+
+  const lat = parseFloat(dest[0].latitude);
+  const lng = parseFloat(dest[0].longitude);
+
+  // Haversine formula: distance in km between the destination and each place
+  const [places] = await db.query(
+    `SELECT p.id, p.name, p.type, p.description, p.image, p.area_name,
+            pr.avg_rating, pr.review_count,
+            ROUND(6371 * ACOS(LEAST(1,
+              COS(RADIANS(?)) * COS(RADIANS(p.latitude)) *
+              COS(RADIANS(p.longitude) - RADIANS(?)) +
+              SIN(RADIANS(?)) * SIN(RADIANS(p.latitude))
+            )), 1) AS distance_km
+     FROM places p
+     JOIN place_ratings pr ON pr.place_id = p.id
+     WHERE p.destination_id IS NULL AND p.status = 'approved' AND p.latitude IS NOT NULL
+     HAVING distance_km <= 30
+     ORDER BY distance_km
+     LIMIT 12`,
+    [lat, lng, lat]
+  );
+
+  res.json({
+    destination: { name: dest[0].name, slug: dest[0].slug },
+    places,
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

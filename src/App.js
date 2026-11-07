@@ -11,8 +11,10 @@ import PlaceDetailsPage from "./Pages/PlaceDetailsPage";
 import MyBookingsPage from "./Pages/MyBookingsPage";
 import AdminDashboardPage from "./Pages/AdminDashboardPage";
 import OwnerDashboardPage from "./Pages/OwnerDashboardPage";
+import NearbyPage from "./Pages/NearbyPage";
 
 import "./App.css";
+
 
 function App() {
   return (
@@ -50,6 +52,7 @@ function App() {
          <Route path="/my-bookings" element={<MyBookingsPage />} />
          <Route path="/admin" element={<AdminDashboardPage/>} />
          <Route path="/owner" element={<OwnerDashboardPage />} />
+         <Route path="/nearby/:slug" element={<NearbyPage />} />
          <Route path="/:slug" element={<DestinationPage />} />
       </Routes>
 

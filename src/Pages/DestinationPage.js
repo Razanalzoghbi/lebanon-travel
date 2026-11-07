@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import FavoriteButton from "../components/FavoriteButton";
+import PlaceImage from "../components/PlaceImage";
 
 const API = "http://localhost:5000";
 
@@ -64,7 +65,7 @@ function DestinationPage() {
                         <div className="card mb-4">
                           <FavoriteButton item={{ title: p.name, image: p.image }} />
                           <Link to={`/places/${p.id}`}>
-                            <img src={p.image} className="img-fluid w-100 card-img" alt={p.name} />
+                            <PlaceImage src={p.image} alt={p.name} />
                           </Link>
                           <div className="card-body text-center">
                             <h5>
@@ -90,6 +91,14 @@ function DestinationPage() {
                 </div>
               );
             })}
+
+            <div className="text-center my-5 p-4 border rounded bg-white shadow-sm">
+              <h4 className="mb-2">Want to see more around {dest.name}?</h4>
+              <p className="text-muted">Discover nearby places you might want to visit.</p>
+              <Link to={`/nearby/${dest.slug}`} className="btn custom-btn">
+                Nearby suggestions →
+              </Link>
+            </div>
           </>
         )}
       </div>
