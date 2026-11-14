@@ -15,6 +15,7 @@ import NearbyPage from "./Pages/NearbyPage";
 import ExperiencesPage from "./Pages/ExperiencesPage";
 import ShareExperiencePage from "./Pages/ShareExperiencePage";
 import SearchPage from "./Pages/SearchPage";
+import AIChat from "./components/AIChat";
 
 import "./App.css";
 
@@ -61,6 +62,7 @@ function App() {
          <Route path="/search" element={<SearchPage />} />
          <Route path="/:slug" element={<DestinationPage />} />
       </Routes>
+       <AIChat />
 
     </Router>
 
