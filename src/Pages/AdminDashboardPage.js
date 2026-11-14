@@ -17,6 +17,7 @@ function AdminDashboardPage() {
   const [error, setError] = useState("");
   const [claims, setClaims] = useState([]);
   const [newPlaces, setNewPlaces] = useState([]);
+  const [experiences, setExperiences] = useState([]);
 
   const loadPlaces = useCallback(() => {
     fetch(`${API}/api/admin/places`, {
@@ -36,6 +37,26 @@ function AdminDashboardPage() {
       body: JSON.stringify({ status }),
     });
     loadPlaces();
+  };
+
+  const loadExperiences = useCallback(() => {
+    fetch(`${API}/api/admin/experiences`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setExperiences);
+  }, []);
+
+  const decideExperience = async (id, status) => {
+    await fetch(`${API}/api/admin/experiences/${id}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    loadExperiences();
   };
 
   const loadClaims = useCallback(() => {
@@ -79,8 +100,9 @@ function AdminDashboardPage() {
       load();
       loadClaims();
       loadPlaces();
+      loadExperiences();
     }
-  }, [load, loadClaims, loadPlaces]); // eslint-disable-line
+  }, [load, loadClaims, loadPlaces, loadExperiences]); // eslint-disable-line
 
   const setStatus = async (id, status) => {
     await fetch(`${API}/api/admin/users/${id}/status`, {
@@ -162,6 +184,37 @@ function AdminDashboardPage() {
                       Approve
                     </button>
                     <button className="btn btn-outline-danger btn-sm" onClick={() => decidePlace(p.id, "rejected")}>
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <h4 className="mt-5">Experiences waiting for approval ({experiences.length})</h4>
+            {experiences.length === 0 && <p className="text-muted">No new experiences right now.</p>}
+            {experiences.map((e) => (
+              <div key={e.id} className="card mb-2 shadow-sm">
+                <div className="card-body d-flex flex-wrap justify-content-between align-items-start">
+                  <div style={{ maxWidth: "75%" }}>
+                    <strong>{e.title}</strong>{" "}
+                    <span className="badge bg-secondary text-capitalize">{e.category}</span>
+                    <div className="text-muted small">
+                      {e.place_name} · {e.region_name} · by {e.user_name} ({e.user_email})
+                      {e.rating && ` · ${e.rating}/5`}
+                    </div>
+                    <div className="small mt-1">{e.content}</div>
+                    {e.image && (
+                      <a href={e.image} target="_blank" rel="noreferrer" className="small">
+                        View photo
+                      </a>
+                    )}
+                  </div>
+                  <div>
+                    <button className="btn btn-success btn-sm me-2" onClick={() => decideExperience(e.id, "approved")}>
+                      Approve
+                    </button>
+                    <button className="btn btn-outline-danger btn-sm" onClick={() => decideExperience(e.id, "rejected")}>
                       Reject
                     </button>
                   </div>

@@ -12,6 +12,8 @@ import MyBookingsPage from "./Pages/MyBookingsPage";
 import AdminDashboardPage from "./Pages/AdminDashboardPage";
 import OwnerDashboardPage from "./Pages/OwnerDashboardPage";
 import NearbyPage from "./Pages/NearbyPage";
+import ExperiencesPage from "./Pages/ExperiencesPage";
+import ShareExperiencePage from "./Pages/ShareExperiencePage";
 
 import "./App.css";
 
@@ -53,6 +55,8 @@ function App() {
          <Route path="/admin" element={<AdminDashboardPage/>} />
          <Route path="/owner" element={<OwnerDashboardPage />} />
          <Route path="/nearby/:slug" element={<NearbyPage />} />
+         <Route path="/experiences" element={<ExperiencesPage />} />
+         <Route path="/share-experience" element={<ShareExperiencePage />} />
          <Route path="/:slug" element={<DestinationPage />} />
       </Routes>
 

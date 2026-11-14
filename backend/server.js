@@ -570,5 +570,122 @@ app.get("/api/destinations/:slug/nearby", async (req, res) => {
   });
 });
 
+// ---------------------- EXPERIENCES ----------------------
+
+// Regions (used by the Experiences filter and the share form)
+app.get("/api/regions", async (req, res) => {
+  const [rows] = await db.query("SELECT id, name FROM regions ORDER BY id");
+  res.json(rows);
+});
+
+// Approved experiences, newest first (optionally only one region)
+app.get("/api/experiences", async (req, res) => {
+  const regionId = parseInt(req.query.region_id, 10);
+  const params = [];
+  let where = "e.status = 'approved'";
+  if (regionId) {
+    where += " AND e.region_id = ?";
+    params.push(regionId);
+  }
+  if (["attraction", "restaurant", "cafe", "hotel"].includes(req.query.category)) {
+    where += " AND e.category = ?";
+    params.push(req.query.category);
+  }
+  const [rows] = await db.query(
+    `SELECT e.id, e.title, e.place_name, e.category, e.location, e.content, e.rating, e.created_at,
+            u.name AS user_name, r.id AS region_id, r.name AS region_name,
+            (SELECT i.image_url FROM experience_images i
+              WHERE i.experience_id = e.id ORDER BY i.sort_order, i.id LIMIT 1) AS image
+     FROM experiences e
+     JOIN users u ON u.id = e.user_id
+     JOIN regions r ON r.id = e.region_id
+     WHERE ${where}
+     ORDER BY e.created_at DESC`,
+    params
+  );
+  res.json(rows);
+});
+
+// A traveler shares an experience (waits for admin approval)
+app.post("/api/experiences", requireAuth, async (req, res) => {
+  if (req.user.role !== "user") {
+    return res.status(403).json({ message: "Only travelers can share experiences" });
+  }
+  const b = req.body;
+  const regionId = parseInt(b.region_id, 10);
+  const title = (b.title || "").trim();
+  const placeName = (b.place_name || "").trim();
+  const content = (b.content || "").trim();
+  const location = (b.location || "").trim();
+  const imageUrl = (b.image_url || "").trim();
+
+  if (!regionId || !title || !placeName || !content) {
+    return res.status(400).json({ message: "Title, place name, region and your experience are required" });
+  }
+  if (title.length > 150 || placeName.length > 150 || location.length > 255) {
+    return res.status(400).json({ message: "Some text is too long" });
+  }
+  if (!["attraction", "restaurant", "cafe", "hotel"].includes(b.category)) {
+    return res.status(400).json({ message: "Please choose a category" });
+  }
+
+  let rating = null; // the rating is optional
+  if (b.rating !== undefined && b.rating !== null && b.rating !== "" && Number(b.rating) !== 0) {
+    rating = parseInt(b.rating, 10);
+    if (!(rating >= 1 && rating <= 5)) {
+      return res.status(400).json({ message: "Rating must be from 1 to 5" });
+    }
+  }
+  if (imageUrl && (!/^https?:\/\//i.test(imageUrl) || imageUrl.length > 255)) {
+    return res.status(400).json({ message: "Photo link must start with http:// or https://" });
+  }
+
+  const [region] = await db.query("SELECT id FROM regions WHERE id = ?", [regionId]);
+  if (region.length === 0) return res.status(400).json({ message: "Region not found" });
+
+  const [result] = await db.query(
+    `INSERT INTO experiences (user_id, region_id, title, place_name, category, location, content, rating)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [req.user.id, regionId, title, placeName, b.category, location || null, content, rating]
+  );
+  if (imageUrl) {
+    await db.query(
+      "INSERT INTO experience_images (experience_id, image_url, sort_order) VALUES (?, ?, 0)",
+      [result.insertId, imageUrl]
+    );
+  }
+  res.status(201).json({ message: "Thank you! Your experience will appear after the admin approves it." });
+});
+
+// Admin: experiences waiting for approval
+app.get("/api/admin/experiences", requireAuth, requireRole("admin"), async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT e.id, e.title, e.place_name, e.category, e.location, e.content, e.rating, e.created_at,
+            u.name AS user_name, u.email AS user_email, r.name AS region_name,
+            (SELECT i.image_url FROM experience_images i
+              WHERE i.experience_id = e.id ORDER BY i.sort_order, i.id LIMIT 1) AS image
+     FROM experiences e
+     JOIN users u ON u.id = e.user_id
+     JOIN regions r ON r.id = e.region_id
+     WHERE e.status = 'pending'
+     ORDER BY e.created_at`
+  );
+  res.json(rows);
+});
+
+app.patch("/api/admin/experiences/:id/status", requireAuth, requireRole("admin"), async (req, res) => {
+  const { status } = req.body;
+  if (!["approved", "rejected"].includes(status)) {
+    return res.status(400).json({ message: "Status must be approved or rejected" });
+  }
+  const [result] = await db.query(
+    "UPDATE experiences SET status = ? WHERE id = ? AND status = 'pending'",
+    [status, req.params.id]
+  );
+  if (result.affectedRows === 0) return res.status(404).json({ message: "Experience not found" });
+  res.json({ message: "Updated" });
+});
+
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
