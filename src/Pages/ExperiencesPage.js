@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import FavoriteButton from "../components/FavoriteButton";
 import { API, getUser } from "../auth";
 
 const REGION_COLORS = {
@@ -130,6 +131,7 @@ function ExperiencesPage() {
               <div key={e.id} className="col-12 col-md-6 col-lg-4">
                 <div className="card h-100 shadow-sm">
                   <div style={{ height: 190, position: "relative" }}>
+                    <FavoriteButton experienceId={e.id} />
                     {e.image ? (
                       <img
                         src={e.image}

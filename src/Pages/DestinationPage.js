@@ -63,7 +63,7 @@ function DestinationPage() {
                     {items.map((p) => (
                       <div className="col-md-6" key={p.id}>
                         <div className="card mb-4">
-                          <FavoriteButton item={{ title: p.name, image: p.image }} />
+                          <FavoriteButton placeId={p.id} />
                           <Link to={`/places/${p.id}`}>
                             <PlaceImage src={p.image} alt={p.name} />
                           </Link>

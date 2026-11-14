@@ -687,5 +687,78 @@ app.patch("/api/admin/experiences/:id/status", requireAuth, requireRole("admin")
 });
 
 
+// ---------------------- FAVORITES ----------------------
+
+// Only travelers (role "user") have favorites
+function onlyTravelers(req, res, next) {
+  if (req.user.role !== "user") {
+    return res.status(403).json({ message: "Only travelers can save favorites" });
+  }
+  next();
+}
+
+// Just the ids (used to color the hearts)
+app.get("/api/favorites/ids", requireAuth, onlyTravelers, async (req, res) => {
+  const [rows] = await db.query(
+    "SELECT place_id, experience_id FROM favorites WHERE user_id = ?",
+    [req.user.id]
+  );
+  res.json({
+    place_ids: rows.filter((r) => r.place_id).map((r) => r.place_id),
+    experience_ids: rows.filter((r) => r.experience_id).map((r) => r.experience_id),
+  });
+});
+
+// Full details (used by the Favorites page)
+app.get("/api/favorites", requireAuth, onlyTravelers, async (req, res) => {
+  const [places] = await db.query(
+    `SELECT p.id, p.name, p.type, p.image, p.area_name, d.name AS destination_name, pr.avg_rating
+     FROM favorites f
+     JOIN places p ON p.id = f.place_id
+     JOIN place_ratings pr ON pr.place_id = p.id
+     LEFT JOIN destinations d ON d.id = p.destination_id
+     WHERE f.user_id = ? AND p.status = 'approved'
+     ORDER BY f.created_at DESC`,
+    [req.user.id]
+  );
+  const [experiences] = await db.query(
+    `SELECT e.id, e.title, e.rating, e.category, r.name AS region_name, u.name AS user_name,
+            (SELECT i.image_url FROM experience_images i
+              WHERE i.experience_id = e.id ORDER BY i.sort_order, i.id LIMIT 1) AS image
+     FROM favorites f
+     JOIN experiences e ON e.id = f.experience_id
+     JOIN regions r ON r.id = e.region_id
+     JOIN users u ON u.id = e.user_id
+     WHERE f.user_id = ? AND e.status = 'approved'
+     ORDER BY f.created_at DESC`,
+    [req.user.id]
+  );
+  res.json({ places, experiences });
+});
+
+app.post("/api/favorites/place/:id", requireAuth, onlyTravelers, async (req, res) => {
+  const [place] = await db.query("SELECT id FROM places WHERE id = ? AND status = 'approved'", [req.params.id]);
+  if (place.length === 0) return res.status(404).json({ message: "Place not found" });
+  await db.query("INSERT IGNORE INTO favorites (user_id, place_id) VALUES (?, ?)", [req.user.id, req.params.id]);
+  res.status(201).json({ message: "Saved" });
+});
+
+app.delete("/api/favorites/place/:id", requireAuth, onlyTravelers, async (req, res) => {
+  await db.query("DELETE FROM favorites WHERE user_id = ? AND place_id = ?", [req.user.id, req.params.id]);
+  res.json({ message: "Removed" });
+});
+
+app.post("/api/favorites/experience/:id", requireAuth, onlyTravelers, async (req, res) => {
+  const [exp] = await db.query("SELECT id FROM experiences WHERE id = ? AND status = 'approved'", [req.params.id]);
+  if (exp.length === 0) return res.status(404).json({ message: "Experience not found" });
+  await db.query("INSERT IGNORE INTO favorites (user_id, experience_id) VALUES (?, ?)", [req.user.id, req.params.id]);
+  res.status(201).json({ message: "Saved" });
+});
+
+app.delete("/api/favorites/experience/:id", requireAuth, onlyTravelers, async (req, res) => {
+  await db.query("DELETE FROM favorites WHERE user_id = ? AND experience_id = ?", [req.user.id, req.params.id]);
+  res.json({ message: "Removed" });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

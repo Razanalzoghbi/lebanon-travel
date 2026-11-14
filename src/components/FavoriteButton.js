@@ -1,34 +1,73 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { getUser } from "../auth";
+import { loadFavoriteIds, toggleFavorite, subscribe } from "../favorites";
 
-function FavoriteButton({ item }) {
-  const [isFavorite, setIsFavorite] = useState(false);
+// Heart button. Use it with placeId={...} or experienceId={...}
+function FavoriteButton({ placeId, experienceId, onChange }) {
+  const navigate = useNavigate();
+  const user = getUser();
+  const kind = placeId ? "places" : "experiences";
+  const id = placeId || experienceId;
+  const [active, setActive] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const isTraveler = user && user.role === "user";
 
   useEffect(() => {
-    const savedFavorites = JSON.parse(localStorage.getItem("favorites")) || [];
-    const exists = savedFavorites.some((fav) => fav.title === item.title);
-    setIsFavorite(exists);
-  }, [item.title]);
+    if (!isTraveler || !id) return;
+    let alive = true;
+    const refresh = () =>
+      loadFavoriteIds().then((c) => {
+        if (alive) setActive(c[kind].has(id));
+      });
+    refresh();
+    const unsubscribe = subscribe(refresh);
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, [id, kind, isTraveler]);
 
-  const toggleFavorite = (e) => {
+  // owners and admin do not have favorites
+  if (user && !isTraveler) return null;
+
+  const click = async (e) => {
     e.preventDefault();
-    
-    let savedFavorites = JSON.parse(localStorage.getItem("favorites")) || [];
-
-    if (isFavorite) {
-      savedFavorites = savedFavorites.filter((fav) => fav.title !== item.title);
-    } else {
-      savedFavorites.push(item);
+    e.stopPropagation();
+    if (!user) {
+      navigate("/login");
+      return;
     }
-
-    localStorage.setItem("favorites", JSON.stringify(savedFavorites));
-    setIsFavorite(!isFavorite);
+    if (busy) return;
+    setBusy(true);
+    const now = await toggleFavorite(kind, id);
+    setBusy(false);
+    if (now !== null && onChange) onChange(now);
   };
 
   return (
-    <button className="fav-btn" onClick={toggleFavorite}>
-      <span className="heart-icon" style={{ color: isFavorite ? "#dc3545" : "#6c757d" }}>
-        {isFavorite ? "♥" : "♡"}
-      </span>
+    <button
+      type="button"
+      onClick={click}
+      aria-label={active ? "Remove from favorites" : "Add to favorites"}
+      title={active ? "Remove from favorites" : "Add to favorites"}
+      style={{
+        position: "absolute",
+        top: 10,
+        right: 10,
+        zIndex: 2,
+        width: 36,
+        height: 36,
+        borderRadius: "50%",
+        border: "none",
+        background: "rgba(255,255,255,0.9)",
+        color: active ? "#e53935" : "#999",
+        fontSize: "1.3rem",
+        lineHeight: 1,
+        cursor: "pointer",
+      }}
+    >
+      {active ? "♥" : "♡"}
     </button>
   );
 }

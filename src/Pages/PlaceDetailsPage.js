@@ -118,7 +118,7 @@ function PlaceDetailsPage() {
             <div className="row mt-3 g-4">
               <div className="col-lg-7">
                 <div className="card position-relative">
-                  <FavoriteButton item={{ title: place.name, image: place.image }} />
+                  <FavoriteButton placeId={place.id} />
                   <PlaceImage src={place.image} alt={place.name} height={300} />
                 </div>
 
