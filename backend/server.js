@@ -591,6 +591,12 @@ app.get("/api/experiences", async (req, res) => {
     where += " AND e.category = ?";
     params.push(req.query.category);
   }
+  const q = (req.query.q || "").trim().slice(0, 100);
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+    where += " AND (e.title LIKE ? OR e.place_name LIKE ? OR e.content LIKE ? OR e.location LIKE ? OR u.name LIKE ?)";
+    params.push(like, like, like, like, like);
+  }
   const [rows] = await db.query(
     `SELECT e.id, e.title, e.place_name, e.category, e.location, e.content, e.rating, e.created_at,
             u.name AS user_name, r.id AS region_id, r.name AS region_name,
@@ -758,6 +764,149 @@ app.post("/api/favorites/experience/:id", requireAuth, onlyTravelers, async (req
 app.delete("/api/favorites/experience/:id", requireAuth, onlyTravelers, async (req, res) => {
   await db.query("DELETE FROM favorites WHERE user_id = ? AND experience_id = ?", [req.user.id, req.params.id]);
   res.json({ message: "Removed" });
+});
+
+// ---------------------- SEARCH ----------------------
+
+// Reads the logged-in user if there is a token (visitors can search too)
+function optionalUserId(req) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return null;
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET).id;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Search places and destinations. Filters: type, region_id, min_rating
+app.get("/api/search", async (req, res) => {
+  const q = (req.query.q || "").trim().slice(0, 100);
+  const type = ["attraction", "restaurant", "cafe", "hotel"].includes(req.query.type) ? req.query.type : null;
+  const regionId = parseInt(req.query.region_id, 10) || null;
+  const minRating = parseFloat(req.query.min_rating) || 0;
+
+  if (!q && !type && !regionId && !minRating) {
+    return res.json({ places: [], destinations: [] });
+  }
+
+  const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+  const params = [];
+  let where = "p.status = 'approved'";
+  if (q) {
+    where += " AND (p.name LIKE ? OR p.description LIKE ? OR p.area_name LIKE ? OR d.name LIKE ?)";
+    params.push(like, like, like, like);
+  }
+  if (type) {
+    where += " AND p.type = ?";
+    params.push(type);
+  }
+  if (minRating) {
+    where += " AND pr.avg_rating >= ?";
+    params.push(minRating);
+  }
+  let having = "";
+  if (regionId) {
+    having = "HAVING region_id = ?";
+    params.push(regionId);
+  }
+
+  // places outside a destination (Nearby) get the region of the closest destination
+  const [places] = await db.query(
+    `SELECT p.id, p.name, p.type, p.image, p.area_name, d.name AS destination_name,
+            pr.avg_rating, pr.review_count,
+            COALESCE(d.region_id,
+              (SELECT d2.region_id FROM destinations d2
+                ORDER BY POW(d2.latitude - p.latitude, 2) + POW(d2.longitude - p.longitude, 2) LIMIT 1)
+            ) AS region_id
+     FROM places p
+     JOIN place_ratings pr ON pr.place_id = p.id
+     LEFT JOIN destinations d ON d.id = p.destination_id
+     WHERE ${where}
+     ${having}
+     ORDER BY ${q ? "(p.name LIKE ?) DESC," : ""} pr.avg_rating DESC, p.name
+     LIMIT 60`,
+    q ? [...params, like] : params
+  );
+
+  // destinations whose name (or region) matches: only for a plain text search
+  let destinations = [];
+  if (q && !type && !minRating) {
+    const dParams = [like, like];
+    let dWhere = "(d.name LIKE ? OR r.name LIKE ?)";
+    if (regionId) {
+      dWhere += " AND d.region_id = ?";
+      dParams.push(regionId);
+    }
+    [destinations] = await db.query(
+      `SELECT d.id, d.name, d.slug, r.name AS region
+       FROM destinations d JOIN regions r ON r.id = d.region_id
+       WHERE ${dWhere} ORDER BY d.name`,
+      dParams
+    );
+  }
+
+  // plain text search with no result: remember it (the admin sees these)
+  if (q && !type && !regionId && !minRating && places.length === 0 && destinations.length === 0) {
+    await db.query("INSERT INTO search_logs (query, results_count, user_id) VALUES (?, 0, ?)", [
+      q.toLowerCase().slice(0, 150),
+      optionalUserId(req),
+    ]);
+  }
+
+  res.json({ places, destinations });
+});
+
+// Admin: most frequent searches that found nothing
+app.get("/api/admin/search-logs", requireAuth, requireRole("admin"), async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT query, COUNT(*) AS times, MAX(created_at) AS last_seen
+     FROM search_logs
+     WHERE results_count = 0
+     GROUP BY query
+     ORDER BY times DESC, last_seen DESC
+     LIMIT 10`
+  );
+  res.json(rows);
+});
+
+// ---------------------- HOME PAGE ----------------------
+
+// Numbers + best rated places + newest experiences for the home page
+app.get("/api/home", async (req, res) => {
+  const [[stats]] = await db.query(
+    `SELECT
+       (SELECT COUNT(*) FROM destinations) AS destinations,
+       (SELECT COUNT(*) FROM places WHERE status = 'approved') AS places,
+       (SELECT COUNT(*) FROM experiences WHERE status = 'approved') AS experiences,
+       (SELECT COUNT(*) FROM regions) AS regions`
+  );
+
+  const [topPlaces] = await db.query(
+    `SELECT p.id, p.name, p.type, p.image, p.area_name, d.name AS destination_name,
+            pr.avg_rating, pr.review_count
+     FROM places p
+     JOIN place_ratings pr ON pr.place_id = p.id
+     LEFT JOIN destinations d ON d.id = p.destination_id
+     WHERE p.status = 'approved' AND pr.review_count > 0
+     ORDER BY pr.avg_rating DESC, pr.review_count DESC
+     LIMIT 6`
+  );
+
+  const [latestExperiences] = await db.query(
+    `SELECT e.id, e.title, e.content, u.name AS user_name, r.name AS region_name,
+            (SELECT i.image_url FROM experience_images i
+              WHERE i.experience_id = e.id ORDER BY i.sort_order, i.id LIMIT 1) AS image
+     FROM experiences e
+     JOIN users u ON u.id = e.user_id
+     JOIN regions r ON r.id = e.region_id
+     WHERE e.status = 'approved'
+     ORDER BY e.created_at DESC
+     LIMIT 3`
+  );
+
+  res.json({ stats, topPlaces, latestExperiences });
 });
 
 const PORT = process.env.PORT || 5000;

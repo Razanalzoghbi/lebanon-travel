@@ -18,6 +18,7 @@ function AdminDashboardPage() {
   const [claims, setClaims] = useState([]);
   const [newPlaces, setNewPlaces] = useState([]);
   const [experiences, setExperiences] = useState([]);
+  const [missedSearches, setMissedSearches] = useState([]);
 
   const loadPlaces = useCallback(() => {
     fetch(`${API}/api/admin/places`, {
@@ -58,6 +59,14 @@ function AdminDashboardPage() {
     });
     loadExperiences();
   };
+
+  const loadMissedSearches = useCallback(() => {
+    fetch(`${API}/api/admin/search-logs`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setMissedSearches);
+  }, []);
 
   const loadClaims = useCallback(() => {
     fetch(`${API}/api/admin/claims`, {
@@ -101,8 +110,9 @@ function AdminDashboardPage() {
       loadClaims();
       loadPlaces();
       loadExperiences();
+      loadMissedSearches();
     }
-  }, [load, loadClaims, loadPlaces, loadExperiences]); // eslint-disable-line
+  }, [load, loadClaims, loadPlaces, loadExperiences, loadMissedSearches]); // eslint-disable-line
 
   const setStatus = async (id, status) => {
     await fetch(`${API}/api/admin/users/${id}/status`, {
@@ -246,6 +256,36 @@ function AdminDashboardPage() {
                 </div>
               </div>
             ))}
+
+            <h4 className="mt-5">Searches with no results</h4>
+            <p className="text-muted small">
+              What visitors looked for and we do not have yet. Good ideas for new places.
+            </p>
+            {missedSearches.length === 0 && <p className="text-muted">No missed searches yet.</p>}
+            {missedSearches.length > 0 && (
+              <div className="table-responsive">
+                <table className="table table-sm align-middle bg-white">
+                  <thead>
+                    <tr>
+                      <th>Search</th>
+                      <th>Times</th>
+                      <th>Last searched</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missedSearches.map((m) => (
+                      <tr key={m.query}>
+                        <td>{m.query}</td>
+                        <td>
+                          <span className="badge bg-secondary">{m.times}</span>
+                        </td>
+                        <td className="text-muted small">{new Date(m.last_seen).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <h4 className="mt-5">All users</h4>
             <div className="table-responsive">

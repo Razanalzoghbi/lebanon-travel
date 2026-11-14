@@ -14,6 +14,7 @@ import OwnerDashboardPage from "./Pages/OwnerDashboardPage";
 import NearbyPage from "./Pages/NearbyPage";
 import ExperiencesPage from "./Pages/ExperiencesPage";
 import ShareExperiencePage from "./Pages/ShareExperiencePage";
+import SearchPage from "./Pages/SearchPage";
 
 import "./App.css";
 
@@ -57,6 +58,7 @@ function App() {
          <Route path="/nearby/:slug" element={<NearbyPage />} />
          <Route path="/experiences" element={<ExperiencesPage />} />
          <Route path="/share-experience" element={<ShareExperiencePage />} />
+         <Route path="/search" element={<SearchPage />} />
          <Route path="/:slug" element={<DestinationPage />} />
       </Routes>
 

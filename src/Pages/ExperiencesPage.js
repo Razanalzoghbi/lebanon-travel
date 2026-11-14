@@ -36,6 +36,8 @@ function ExperiencesPage() {
   const [regions, setRegions] = useState([]);
   const [regionId, setRegionId] = useState(0); // 0 = all regions
   const [category, setCategory] = useState(""); // "" = all types
+  const [search, setSearch] = useState(""); // what the visitor is typing
+  const [q, setQ] = useState(""); // the search used for the request (after a short pause)
   const [items, setItems] = useState(null);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState(null);
@@ -47,12 +49,19 @@ function ExperiencesPage() {
       .catch(() => {});
   }, []);
 
+  // wait a moment after typing before searching
+  useEffect(() => {
+    const timer = setTimeout(() => setQ(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     setItems(null);
     setError("");
     const query = new URLSearchParams();
     if (regionId) query.set("region_id", regionId);
     if (category) query.set("category", category);
+    if (q) query.set("q", q);
     fetch(`${API}/api/experiences?${query.toString()}`)
       .then((res) => {
         if (!res.ok) throw new Error("Could not load experiences");
@@ -60,7 +69,7 @@ function ExperiencesPage() {
       })
       .then(setItems)
       .catch((err) => setError(err.message));
-  }, [regionId, category]);
+  }, [regionId, category, q]);
 
   const share = () => {
     if (!user) navigate("/login");
@@ -71,7 +80,7 @@ function ExperiencesPage() {
     <div>
       <Navbar />
       <div className="container mt-5 mb-5" style={{ minHeight: "65vh" }}>
-        <div className="d-flex flex-wrap justify-content-between align-items-start mb-3">
+        <div className="d-flex flex-wrap justify-content-between align-items-start mb-4">
           <div>
             <h1 className="fw-bold">User Experiences</h1>
             <p className="text-muted">Real stories from travelers in Lebanon</p>
@@ -81,7 +90,23 @@ function ExperiencesPage() {
           </button>
         </div>
 
-        <div className="mb-2 d-flex flex-wrap gap-2">
+        <div className="input-group mb-4 mx-auto" style={{ maxWidth: 460 }}>
+          <span className="input-group-text bg-white">🔍</span>
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Search stories, places, travelers..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button className="btn btn-outline-secondary" onClick={() => setSearch("")} aria-label="Clear search">
+              ✕
+            </button>
+          )}
+        </div>
+
+        <div className="mb-2 d-flex flex-wrap justify-content-center gap-2">
           <button
             className={`btn rounded-pill ${regionId === 0 ? "btn-primary" : "btn-outline-secondary"}`}
             onClick={() => setRegionId(0)}
@@ -99,7 +124,7 @@ function ExperiencesPage() {
           ))}
         </div>
 
-        <div className="mb-4 d-flex flex-wrap gap-2">
+        <div className="mb-5 d-flex flex-wrap justify-content-center gap-2">
           {CATEGORIES.map((c) => (
             <button
               key={c.value}
@@ -115,11 +140,17 @@ function ExperiencesPage() {
         {!items && !error && <p>Loading...</p>}
         {items && items.length === 0 && (
           <p className="text-muted">
-            No experiences here yet. Be the first to{" "}
-            <button className="btn btn-link p-0 align-baseline" onClick={share}>
-              share yours
-            </button>
-            .
+            {q ? (
+              `No stories match "${q}".`
+            ) : (
+              <>
+                No experiences here yet. Be the first to{" "}
+                <button className="btn btn-link p-0 align-baseline" onClick={share}>
+                  share yours
+                </button>
+                .
+              </>
+            )}
           </p>
         )}
 
