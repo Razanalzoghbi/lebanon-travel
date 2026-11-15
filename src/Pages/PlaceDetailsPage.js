@@ -3,7 +3,6 @@ import { useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import FavoriteButton from "../components/FavoriteButton";
-import PlaceImage from "../components/PlaceImage";
 import { API, getUser, getToken } from "../auth";
 
 function Stars({ value }) {
@@ -16,11 +15,54 @@ function Stars({ value }) {
   );
 }
 
+const TYPES = {
+  attraction: { label: "Attraction", icon: "🏛️", color: "#1f7fc9" },
+  restaurant: { label: "Restaurant", icon: "🍽️", color: "#2e9e5b" },
+  cafe: { label: "Cafe", icon: "☕", color: "#d98a1c" },
+  hotel: { label: "Hotel", icon: "🏨", color: "#c8452f" },
+};
+
+const STYLE = `
+  .pd-main { position: relative; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 18px; background: #eef1f4; }
+  .pd-main img { width: 100%; height: 100%; object-fit: cover; }
+  .pd-type {
+    position: absolute; left: 14px; bottom: 14px; background: rgba(255,255,255,.95);
+    border-radius: 999px; padding: .2rem .8rem; font-size: .85rem; font-weight: 600;
+  }
+  .pd-thumbs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 10px; }
+  .pd-thumb {
+    aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; cursor: pointer; padding: 0;
+    border: 3px solid transparent; opacity: .75; transition: opacity .2s, border-color .2s; background: #eef1f4;
+  }
+  .pd-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pd-thumb:hover { opacity: 1; }
+  .pd-thumb.active { border-color: #1f7fc9; opacity: 1; }
+  .pd-info { display: flex; align-items: flex-start; gap: .7rem; margin-bottom: .6rem; }
+  .pd-info-icon {
+    flex: 0 0 34px; height: 34px; border-radius: 50%; background: #eaf3fb;
+    display: flex; align-items: center; justify-content: center; font-size: 1rem;
+  }
+  .pd-card { border: 1px solid #e6e9ee; border-radius: 16px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+  .pd-avatar {
+    width: 40px; height: 40px; border-radius: 50%; background: #1c4f8f; color: #fff; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .pd-bar { height: 8px; background: #edf0f3; border-radius: 99px; overflow: hidden; }
+  .pd-bar > div { height: 100%; background: #f5a623; }
+  .pd-section-title { border-left: 5px solid #1f7fc9; padding-left: .75rem; }
+`;
+
+function Avatar({ name }) {
+  return <div className="pd-avatar">{(name || "?").trim().charAt(0).toUpperCase()}</div>;
+}
+
 function PlaceDetailsPage() {
   const { id } = useParams();
   const user = getUser();
   const [place, setPlace] = useState(null);
   const [error, setError] = useState("");
+  const [activeImg, setActiveImg] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
   const [experiences, setExperiences] = useState([]);
 
   const [rating, setRating] = useState(0);
@@ -73,6 +115,7 @@ function PlaceDetailsPage() {
   }, [id]);
 
   useEffect(() => {
+    setActiveImg(0);
     load();
   }, [load]);
 
@@ -108,57 +151,110 @@ function PlaceDetailsPage() {
     }
   };
 
+  // main photo first, then the gallery photos
+  const photos = place ? [place.image, ...place.images].filter((u, i, a) => u && a.indexOf(u) === i) : [];
+  const shown = photos[Math.min(activeImg, Math.max(photos.length - 1, 0))];
+  const t = place ? TYPES[place.type] || TYPES.attraction : null;
+  const counts = [5, 4, 3, 2, 1].map((n) => (place ? place.reviews.filter((r) => r.rating === n).length : 0));
+
   return (
     <div>
+      <style>{STYLE}</style>
       <Navbar />
-      <div className="container mt-5 mb-5" style={{ minHeight: "65vh" }}>
+      <div className="container mt-4 mb-5" style={{ minHeight: "65vh" }}>
         {error && <p className="text-center text-danger">{error}</p>}
         {!place && !error && <p className="text-center">Loading...</p>}
 
         {place && (
           <>
             {place.destination_slug ? (
-              <Link to={`/${place.destination_slug}`}>← Back to {place.destination_name}</Link>
+              <Link to={`/${place.destination_slug}`} className="text-decoration-none">
+                ← Back to {place.destination_name}
+              </Link>
             ) : (
-              <Link to="/destinations">← Back to destinations</Link>
+              <Link to="/destinations" className="text-decoration-none">
+                ← Back to destinations
+              </Link>
             )}
 
             <div className="row mt-3 g-4">
               <div className="col-lg-7">
-                <div className="card position-relative">
+                <div className="pd-main shadow-sm">
                   <FavoriteButton placeId={place.id} />
-                  <PlaceImage src={place.image} alt={place.name} height={300} />
+                  {shown ? (
+                    <img src={shown} alt={place.name} />
+                  ) : (
+                    <div className="h-100 d-flex align-items-center justify-content-center text-muted">
+                      No photo yet
+                    </div>
+                  )}
+                  <span className="pd-type" style={{ color: t.color }}>
+                    {t.icon} {t.label}
+                  </span>
                 </div>
 
-                {place.images.length > 0 && (
-                  <div className="row mt-3">
-                    {place.images.map((url) => (
-                      <div className="col-6" key={url}>
-                        <img src={url} className="img-fluid rounded" alt={place.name} />
-                      </div>
+                {photos.length > 1 && (
+                  <div className="pd-thumbs">
+                    {photos.slice(0, 10).map((url, i) => (
+                      <button
+                        type="button"
+                        key={url}
+                        className={`pd-thumb ${i === activeImg ? "active" : ""}`}
+                        onClick={() => setActiveImg(i)}
+                        aria-label={`Photo ${i + 1}`}
+                      >
+                        <img src={url} alt="" loading="lazy" />
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
 
               <div className="col-lg-5">
-                <span className="badge bg-secondary text-capitalize mb-2">{place.type}</span>
-                <h1 className="fw-bold">{place.name}</h1>
+                <h1 className="fw-bold mb-2" style={{ fontSize: "2rem" }}>
+                  {place.name}
+                </h1>
 
-                <p className="mb-2">
-                  <Stars value={place.avg_rating} />{" "}
-                  {place.review_count > 0
-                    ? `${place.avg_rating} (${place.review_count} reviews)`
-                    : "No reviews yet"}
-                </p>
+                <div className="d-flex align-items-center flex-wrap gap-2 mb-3">
+                  <Stars value={place.avg_rating} />
+                  <span>
+                    {place.review_count > 0 ? (
+                      <>
+                        <strong>{place.avg_rating}</strong>{" "}
+                        <span className="text-muted">({place.review_count} reviews)</span>
+                      </>
+                    ) : (
+                      <span className="text-muted">No reviews yet</span>
+                    )}
+                  </span>
+                  {place.price_range && <span className="badge bg-light text-dark border">{place.price_range}</span>}
+                </div>
 
-                {place.description && <p>{place.description}</p>}
-                {place.address && <p className="mb-1">📍 {place.address}</p>}
-                {place.phone && <p className="mb-1">📞 {place.phone}</p>}
-                {place.opening_hours && <p className="mb-1">🕒 {place.opening_hours}</p>}
+                {place.description && <p className="text-muted">{place.description}</p>}
+
+                <div className="mb-3">
+                  {place.address && (
+                    <div className="pd-info">
+                      <div className="pd-info-icon">📍</div>
+                      <div>{place.address}</div>
+                    </div>
+                  )}
+                  {place.phone && (
+                    <div className="pd-info">
+                      <div className="pd-info-icon">📞</div>
+                      <div>{place.phone}</div>
+                    </div>
+                  )}
+                  {place.opening_hours && (
+                    <div className="pd-info">
+                      <div className="pd-info-icon">🕒</div>
+                      <div>{place.opening_hours}</div>
+                    </div>
+                  )}
+                </div>
 
                 {user && user.role === "owner" && !place.claimed && (
-                  <div className="mt-3">
+                  <div className="mb-3">
                     <button className="btn btn-outline-primary btn-sm" onClick={claimPlace}>
                       Claim this business
                     </button>
@@ -167,8 +263,8 @@ function PlaceDetailsPage() {
                 )}
 
                 {place.type !== "attraction" && (
-                  <div className="border rounded p-3 mt-4 bg-white shadow-sm">
-                    <h5>{place.type === "hotel" ? "Book a room" : "Book a table"}</h5>
+                  <div className="pd-card p-3 mt-3">
+                    <h5 className="fw-bold">{place.type === "hotel" ? "Book a room" : "Book a table"}</h5>
 
                     {!user && (
                       <p className="mb-0">
@@ -183,35 +279,37 @@ function PlaceDetailsPage() {
                       <form onSubmit={submitBooking}>
                         {bkMsg && <div className={`alert alert-${bkType} py-2`}>{bkMsg}</div>}
 
-                        <div className="mb-2">
-                          <label className="form-label mb-1">
-                            {place.type === "hotel" ? "Check-in date" : "Date"}
-                          </label>
-                          <input
-                            type="date"
-                            className="form-control"
-                            required
-                            min={new Date().toISOString().slice(0, 10)}
-                            value={bk.booking_date}
-                            onChange={(e) => setBk({ ...bk, booking_date: e.target.value })}
-                          />
-                        </div>
-
-                        {place.type !== "hotel" && (
-                          <div className="mb-2">
-                            <label className="form-label mb-1">Time</label>
+                        <div className="row g-2 mb-2">
+                          <div className={place.type === "hotel" ? "col-12" : "col-7"}>
+                            <label className="form-label mb-1 small">
+                              {place.type === "hotel" ? "Check-in date" : "Date"}
+                            </label>
                             <input
-                              type="time"
+                              type="date"
                               className="form-control"
                               required
-                              value={bk.booking_time}
-                              onChange={(e) => setBk({ ...bk, booking_time: e.target.value })}
+                              min={new Date().toISOString().slice(0, 10)}
+                              value={bk.booking_date}
+                              onChange={(e) => setBk({ ...bk, booking_date: e.target.value })}
                             />
                           </div>
-                        )}
+
+                          {place.type !== "hotel" && (
+                            <div className="col-5">
+                              <label className="form-label mb-1 small">Time</label>
+                              <input
+                                type="time"
+                                className="form-control"
+                                required
+                                value={bk.booking_time}
+                                onChange={(e) => setBk({ ...bk, booking_time: e.target.value })}
+                              />
+                            </div>
+                          )}
+                        </div>
 
                         <div className="mb-2">
-                          <label className="form-label mb-1">Guests</label>
+                          <label className="form-label mb-1 small">Guests</label>
                           <input
                             type="number"
                             className="form-control"
@@ -224,7 +322,7 @@ function PlaceDetailsPage() {
                         </div>
 
                         <div className="mb-3">
-                          <label className="form-label mb-1">
+                          <label className="form-label mb-1 small">
                             Notes {place.type === "hotel" && "(number of nights, room type...)"}
                           </label>
                           <textarea
@@ -250,8 +348,8 @@ function PlaceDetailsPage() {
 
             <hr className="my-5" />
 
-            <div className="d-flex justify-content-between align-items-center flex-wrap mb-3">
-              <h3 className="mb-0">Experiences at this place</h3>
+            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+              <h3 className="pd-section-title fw-bold mb-0">Experiences at this place</h3>
               {user && user.role === "user" && (
                 <Link to={`/share-experience?place=${place.id}`} className="btn btn-outline-success btn-sm rounded-pill">
                   + Share your experience here
@@ -259,23 +357,34 @@ function PlaceDetailsPage() {
               )}
             </div>
             {experiences.length === 0 && (
-              <p className="text-muted">No experiences shared about this place yet.</p>
+              <div className="pd-card text-center text-muted p-4 mb-4">
+                <div style={{ fontSize: "1.8rem" }}>📸</div>
+                No experiences shared about this place yet.
+              </div>
             )}
             <div className="row g-3 mb-4">
               {experiences.map((x) => (
                 <div className="col-md-6" key={x.id}>
-                  <div className="border rounded p-3 bg-white h-100">
-                    <div className="d-flex justify-content-between">
-                      <strong>{x.title}</strong>
+                  <div className="pd-card p-3 h-100">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <Avatar name={x.user_name} />
+                      <div className="flex-grow-1">
+                        <strong>{x.user_name}</strong>
+                        <div className="text-muted small">{new Date(x.created_at).toLocaleDateString()}</div>
+                      </div>
                       {x.rating && <Stars value={x.rating} />}
                     </div>
-                    <div className="text-muted small mb-2">
-                      by {x.user_name} · {new Date(x.created_at).toLocaleDateString()}
-                    </div>
+                    <h6 className="fw-bold">{x.title}</h6>
                     {x.images.length > 0 && (
-                      <div className="d-flex flex-wrap gap-2 mb-2">
-                        {x.images.map((url) => (
-                          <img key={url} src={url} alt="" style={{ height: 90, borderRadius: 6 }} />
+                      <div className="d-flex gap-2 mb-2">
+                        {x.images.slice(0, 3).map((url) => (
+                          <img
+                            key={url}
+                            src={url}
+                            alt=""
+                            loading="lazy"
+                            style={{ flex: 1, minWidth: 0, height: 110, objectFit: "cover", borderRadius: 8 }}
+                          />
                         ))}
                       </div>
                     )}
@@ -285,31 +394,58 @@ function PlaceDetailsPage() {
               ))}
             </div>
 
-            <hr className="my-4" />
+            <hr className="my-5" />
 
-            <h3 className="mb-3">Reviews</h3>
+            <h3 className="pd-section-title fw-bold mb-4">Reviews</h3>
             <div className="row g-4">
               <div className="col-lg-7">
+                {place.review_count > 0 && (
+                  <div className="pd-card p-3 mb-3 d-flex align-items-center gap-4 flex-wrap">
+                    <div className="text-center">
+                      <div style={{ fontSize: "2.6rem", fontWeight: 700, lineHeight: 1 }}>{place.avg_rating}</div>
+                      <Stars value={place.avg_rating} />
+                      <div className="text-muted small">{place.review_count} reviews</div>
+                    </div>
+                    <div className="flex-grow-1" style={{ minWidth: 160 }}>
+                      {[5, 4, 3, 2, 1].map((n, i) => (
+                        <div key={n} className="d-flex align-items-center gap-2 small mb-1">
+                          <span style={{ width: 12 }}>{n}</span>
+                          <div className="pd-bar flex-grow-1">
+                            <div style={{ width: `${(counts[i] / place.review_count) * 100}%` }} />
+                          </div>
+                          <span className="text-muted" style={{ width: 20 }}>
+                            {counts[i]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {place.reviews.length === 0 && (
-                  <p className="text-muted">Be the first to review this place.</p>
+                  <div className="pd-card text-center text-muted p-4">
+                    <div style={{ fontSize: "1.8rem" }}>⭐</div>
+                    Be the first to review this place.
+                  </div>
                 )}
                 {place.reviews.map((r) => (
-                  <div key={r.id} className="border rounded p-3 mb-3 bg-white">
-                    <div className="d-flex justify-content-between">
-                      <strong>{r.user_name}</strong>
-                      <small className="text-muted">
-                        {new Date(r.created_at).toLocaleDateString()}
-                      </small>
+                  <div key={r.id} className="pd-card p-3 mb-3">
+                    <div className="d-flex align-items-center gap-2 mb-1">
+                      <Avatar name={r.user_name} />
+                      <div className="flex-grow-1">
+                        <strong>{r.user_name}</strong>
+                        <div className="text-muted small">{new Date(r.created_at).toLocaleDateString()}</div>
+                      </div>
+                      <Stars value={r.rating} />
                     </div>
-                    <Stars value={r.rating} />
-                    {r.comment && <p className="mb-0 mt-1">{r.comment}</p>}
+                    {r.comment && <p className="mb-0 mt-2">{r.comment}</p>}
                   </div>
                 ))}
               </div>
 
               <div className="col-lg-5">
-                <div className="border rounded p-3 bg-white shadow-sm">
-                  <h5>Write a review</h5>
+                <div className="pd-card p-3">
+                  <h5 className="fw-bold">Write a review</h5>
 
                   {!user && (
                     <p className="mb-0">
@@ -325,14 +461,16 @@ function PlaceDetailsPage() {
                     <form onSubmit={submitReview}>
                       {msg && <div className={`alert alert-${msgType} py-2`}>{msg}</div>}
 
-                      <div className="mb-2" style={{ fontSize: "1.8rem" }}>
+                      <div className="mb-2" style={{ fontSize: "1.8rem" }} onMouseLeave={() => setHoverRating(0)}>
                         {[1, 2, 3, 4, 5].map((n) => (
                           <span
                             key={n}
                             onClick={() => setRating(n)}
+                            onMouseEnter={() => setHoverRating(n)}
                             style={{
                               cursor: "pointer",
-                              color: n <= rating ? "#f5a623" : "#ccc",
+                              color: n <= (hoverRating || rating) ? "#f5a623" : "#ccc",
+                              transition: "color .15s",
                             }}
                           >
                             ★

@@ -3,17 +3,95 @@ import { useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import FavoriteButton from "../components/FavoriteButton";
-import PlaceImage from "../components/PlaceImage";
 import NotFoundPage from "./NotFoundPage";
 
 const API = "http://localhost:5000";
 
 const SECTIONS = [
-  { type: "attraction", title: "Attractions", id: "attractions", btn: "btn-outline-primary" },
-  { type: "restaurant", title: "Restaurants", id: "restaurants", btn: "btn-outline-success" },
-  { type: "cafe", title: "Cafes", id: "cafes", btn: "btn-outline-warning" },
-  { type: "hotel", title: "Hotels", id: "hotels", btn: "btn-outline-danger" },
+  { type: "attraction", title: "Attractions", id: "attractions", icon: "🏛️", color: "#1f7fc9" },
+  { type: "restaurant", title: "Restaurants", id: "restaurants", icon: "🍽️", color: "#2e9e5b" },
+  { type: "cafe", title: "Cafes", id: "cafes", icon: "☕", color: "#d98a1c" },
+  { type: "hotel", title: "Hotels", id: "hotels", icon: "🏨", color: "#c8452f" },
 ];
+
+const STYLE = `
+  html { scroll-behavior: smooth; }
+  .dest-hero {
+    position: relative; min-height: clamp(400px, 62vh, 580px); display: flex; align-items: flex-end;
+    background-size: cover; background-position: center; color: #fff;
+  }
+  .dest-hero::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,.15) 65%);
+  }
+  .dest-hero .container { position: relative; padding-bottom: 2rem; }
+  .dest-tabs {
+    position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.95);
+    backdrop-filter: blur(6px); border-bottom: 1px solid #e6e6e6;
+  }
+  .dest-tab {
+    display: inline-flex; align-items: center; gap: .4rem; margin: .5rem .25rem;
+    padding: .4rem 1rem; border-radius: 999px; border: 1.5px solid var(--c);
+    color: var(--c); background: #fff; text-decoration: none; font-weight: 600; font-size: .92rem;
+    transition: background .2s, color .2s;
+  }
+  .dest-tab:hover { background: var(--c); color: #fff; }
+  .dest-tab small { opacity: .75; }
+  .dest-section { scroll-margin-top: 110px; }
+  .dest-section-title { border-left: 5px solid var(--c); padding-left: .75rem; }
+  .place-card { border: none; border-radius: 16px; overflow: hidden; transition: transform .25s ease, box-shadow .25s ease; }
+  .place-card:hover { transform: translateY(-5px); box-shadow: 0 .8rem 1.6rem rgba(0,0,0,.14) !important; }
+  .place-img-wrap { position: relative; aspect-ratio: var(--ratio, 3 / 2); overflow: hidden; background: #eef1f4; }
+  .place-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s ease; }
+  .place-card:hover .place-img-wrap img { transform: scale(1.06); }
+  .place-badge {
+    position: absolute; left: 12px; bottom: 12px; background: rgba(255,255,255,.95);
+    border-radius: 999px; padding: .15rem .7rem; font-size: .8rem; font-weight: 600;
+  }
+  .place-desc {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    color: #6c757d; font-size: .88rem; min-height: 2.6em;
+  }
+  .dest-fade { animation: destFade .5s ease both; }
+  @keyframes destFade { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+`;
+
+function PlaceCard({ p, section }) {
+  return (
+    <div className="card place-card shadow-sm h-100">
+      <FavoriteButton placeId={p.id} />
+      <Link to={`/places/${p.id}`} className="place-img-wrap d-block">
+        {p.image ? (
+          <img src={p.image} alt={p.name} loading="lazy" />
+        ) : (
+          <div className="h-100 d-flex align-items-center justify-content-center text-muted">No photo yet</div>
+        )}
+      </Link>
+      <div className="card-body d-flex flex-column">
+        <h5 className="fw-bold mb-1">
+          <Link to={`/places/${p.id}`} className="text-dark text-decoration-none">
+            {p.name}
+          </Link>
+        </h5>
+        <div className="small mb-2">
+          {p.review_count > 0 ? (
+            <span>
+              <span style={{ color: "#f5a623" }}>★</span> <strong>{p.avg_rating}</strong>{" "}
+              <span className="text-muted">({p.review_count})</span>
+            </span>
+          ) : (
+            <span className="text-muted">No reviews yet</span>
+          )}
+          {p.price_range && <span className="text-muted"> · {p.price_range}</span>}
+        </div>
+        <p className="place-desc mb-3">{p.description}</p>
+        <Link to={`/places/${p.id}`} className="btn custom-btn btn-sm mt-auto align-self-start px-3">
+          {p.type === "attraction" ? "View details" : "Book now"}
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 function DestinationPage() {
   const { slug } = useParams();
@@ -23,6 +101,7 @@ function DestinationPage() {
   useEffect(() => {
     setDest(null);
     setError("");
+    window.scrollTo(0, 0);
     fetch(`${API}/api/destinations/${slug}`)
       .then((res) => {
         if (!res.ok) throw new Error("Destination not found");
@@ -35,77 +114,79 @@ function DestinationPage() {
   // /anything-unknown also arrives here (the /:slug route), so show the 404 page
   if (error === "Destination not found") return <NotFoundPage />;
 
+  const groups = dest
+    ? SECTIONS.map((s) => ({ ...s, items: dest.places.filter((p) => p.type === s.type) })).filter(
+        (s) => s.items.length > 0
+      )
+    : [];
+
   return (
     <div>
+      <style>{STYLE}</style>
       <Navbar />
 
-      <div className="container mt-5" style={{ minHeight: "65vh" }}>
-        {error && <p className="text-center text-danger">{error}</p>}
-        {!dest && !error && <p className="text-center">Loading...</p>}
+      {error && <p className="text-center text-danger mt-5">{error}</p>}
+      {!dest && !error && <p className="text-center mt-5">Loading...</p>}
 
-        {dest && (
-          <>
-            <h1 className="text-center mb-4">Explore {dest.name}</h1>
+      {dest && (
+        <>
+          <div className="dest-hero" style={{ backgroundImage: `url("${dest.image}")` }}>
+            <div className="container dest-fade">
+              {dest.region && (
+                <span className="badge rounded-pill bg-light text-dark mb-2">📍 {dest.region}</span>
+              )}
+              <h1 className="fw-bold display-4 mb-2">{dest.name}</h1>
+              {dest.description && (
+                <p className="mb-0" style={{ maxWidth: 620, opacity: 0.95 }}>
+                  {dest.description}
+                </p>
+              )}
+            </div>
+          </div>
 
-            <div className="text-center mb-4">
-              {SECTIONS.map((s) => (
-                <a key={s.id} href={`#${s.id}`} className={`btn ${s.btn} m-1`}>
-                  {s.title}
+          <div className="dest-tabs">
+            <div className="container text-center">
+              {groups.map((g) => (
+                <a key={g.id} href={`#${g.id}`} className="dest-tab" style={{ "--c": g.color }}>
+                  {g.icon} {g.title} <small>({g.items.length})</small>
                 </a>
               ))}
             </div>
+          </div>
 
-            <img src={dest.image} className="img-fluid mb-5 hero-img" alt={dest.name} />
+          <div className="container mt-4 mb-5" style={{ minHeight: "50vh" }}>
+            {groups.length === 0 && <p className="text-center text-muted my-5">No places here yet.</p>}
 
-            {SECTIONS.map((s) => {
-              const items = dest.places.filter((p) => p.type === s.type);
-              if (items.length === 0) return null;
-              return (
-                <div key={s.id}>
-                  <h2 id={s.id}>{s.title}</h2>
-                  <div className="row">
-                    {items.map((p) => (
-                      <div className="col-md-6" key={p.id}>
-                        <div className="card mb-4">
-                          <FavoriteButton placeId={p.id} />
-                          <Link to={`/places/${p.id}`}>
-                            <PlaceImage src={p.image} alt={p.name} />
-                          </Link>
-                          <div className="card-body text-center">
-                            <h5>
-                              <Link to={`/places/${p.id}`} className="text-dark text-decoration-none">
-                                {p.name}
-                              </Link>
-                            </h5>
-                            <small className="text-muted">
-                              {p.review_count > 0
-                                ? `★ ${p.avg_rating} (${p.review_count})`
-                                : "No reviews yet"}
-                            </small>
-                            <div className="mt-2">
-                              <Link to={`/places/${p.id}`} className="btn custom-btn btn-sm">
-                                {p.type === "attraction" ? "View details" : "Book now"}
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            {groups.map((g) => (
+              <section key={g.id} id={g.id} className="dest-section mb-5" style={{ "--c": g.color }}>
+                <h2 className="dest-section-title h3 fw-bold mb-4">
+                  {g.icon} {g.title}
+                </h2>
+                <div className="row g-4 justify-content-center" style={{ "--ratio": g.items.length <= 2 || g.items.length === 4 ? "4 / 3" : "3 / 2" }}>
+                  {g.items.map((p) => (
+                    <div className={g.items.length <= 2 || g.items.length === 4 ? "col-md-6" : "col-lg-4 col-md-6"} key={p.id}>
+                      <PlaceCard p={p} section={g} />
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
+              </section>
+            ))}
 
-            <div className="text-center my-5 p-4 border rounded bg-white shadow-sm">
-              <h4 className="mb-2">Want to see more around {dest.name}?</h4>
-              <p className="text-muted">Discover nearby places you might want to visit.</p>
-              <Link to={`/nearby/${dest.slug}`} className="btn custom-btn">
+            <div
+              className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 rounded-3 px-4 py-3 mt-5"
+              style={{ background: "#f1f6fb", border: "1px solid #d9e6f2" }}
+            >
+              <div>
+                <h5 className="fw-semibold mb-1">More to explore around {dest.name}</h5>
+                <p className="text-muted small mb-0">Discover nearby places you might want to visit.</p>
+              </div>
+              <Link to={`/nearby/${dest.slug}`} className="btn custom-btn btn-sm px-4 flex-shrink-0">
                 Nearby suggestions →
               </Link>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
 
       <Footer />
     </div>

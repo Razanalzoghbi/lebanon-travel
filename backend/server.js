@@ -9,6 +9,12 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 
+// Optional: email notifications (works only if nodemailer is installed and MAIL_* is set in .env)
+let nodemailer = null;
+try {
+  nodemailer = require("nodemailer");
+} catch (e) {}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -28,7 +34,9 @@ app.get("/", (req, res) => {
 // All destinations, with their region name
 app.get("/api/destinations", async (req, res) => {
   const [rows] = await db.query(
-    `SELECT d.id, d.name, d.slug, d.image, r.name AS region
+    `SELECT d.id, d.name, d.slug, d.image, r.name AS region,
+            (SELECT COUNT(*) FROM places p
+              WHERE p.destination_id = d.id AND p.status = 'approved') AS places_count
      FROM destinations d
      JOIN regions r ON r.id = d.region_id
      ORDER BY r.id, d.name`
@@ -50,7 +58,7 @@ app.get("/api/destinations/:slug", async (req, res) => {
   }
 
   const [places] = await db.query(
-    `SELECT p.id, p.name, p.type, p.description, p.image,
+    `SELECT p.id, p.name, p.type, p.description, p.image, p.price_range,
             pr.avg_rating, pr.review_count
      FROM places p
      JOIN place_ratings pr ON pr.place_id = p.id
@@ -208,7 +216,7 @@ app.get("/api/places/:id/experiences", async (req, res) => {
 app.get("/api/places/:id", async (req, res) => {
   const [rows] = await db.query(
     `SELECT p.id, p.name, p.type, p.description, p.image, p.address, p.phone,
-            p.opening_hours, p.price_range, (p.owner_id IS NOT NULL) AS claimed,
+            p.opening_hours, p.price_range, p.latitude, p.longitude, (p.owner_id IS NOT NULL) AS claimed,
             d.name AS destination_name, d.slug AS destination_slug, d.region_id,
             pr.avg_rating, pr.review_count
      FROM places p
@@ -1060,6 +1068,23 @@ app.post("/api/contact", async (req, res) => {
   contactHits.set(req.ip, recent);
   await db.query("INSERT INTO contact_messages (name, email, message) VALUES (?, ?, ?)", [name, email, message]);
   res.status(201).json({ message: "Thank you! We received your message." });
+
+  // send a copy to our inbox (if it fails, the message is still saved in the database)
+  if (nodemailer && process.env.MAIL_USER && process.env.MAIL_PASS) {
+    const mailer = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
+    });
+    mailer
+      .sendMail({
+        from: `"${name} via Lebanon Travel" <${process.env.MAIL_USER}>`,
+        to: process.env.MAIL_TO || process.env.MAIL_USER,
+        replyTo: email,
+        subject: `New contact message from ${name.replace(/[\r\n]+/g, " ")}`,
+        text: `Name: ${name}\nEmail: ${email}\n\n${message}`,
+      })
+      .catch((err) => console.log("Could not send the email:", err.message));
+  }
 });
 
 // Admin: read the messages (newest first)
