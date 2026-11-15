@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import PromoBanner from "../components/PromoBanner";
 import FavoriteButton from "../components/FavoriteButton";
 import NotFoundPage from "./NotFoundPage";
 
@@ -172,18 +173,15 @@ function DestinationPage() {
               </section>
             ))}
 
-            <div
-              className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 rounded-3 px-4 py-3 mt-5"
-              style={{ background: "#f1f6fb", border: "1px solid #d9e6f2" }}
-            >
-              <div>
-                <h5 className="fw-semibold mb-1">More to explore around {dest.name}</h5>
-                <p className="text-muted small mb-0">Discover nearby places you might want to visit.</p>
-              </div>
-              <Link to={`/nearby/${dest.slug}`} className="btn custom-btn btn-sm px-4 flex-shrink-0">
-                Nearby suggestions →
-              </Link>
-            </div>
+            <PromoBanner
+              className="mt-5"
+              image={dest.image}
+              emoji="🧭"
+              title={`More to explore around ${dest.name}`}
+              text="Discover nearby places you might want to visit."
+              to={`/nearby/${dest.slug}`}
+              button="Nearby suggestions →"
+            />
           </div>
         </>
       )}
