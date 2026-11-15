@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import ImageUpload from "../components/ImageUpload";
 import { API, getUser, getToken } from "../auth";
 
 function ShareExperiencePage() {
@@ -21,6 +22,57 @@ function ShareExperiencePage() {
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // link the experience to a place that exists on the site (optional)
+  const [searchParams] = useSearchParams();
+  const [placeId, setPlaceId] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+
+  // coming from a place page: /share-experience?place=12
+  useEffect(() => {
+    const pid = searchParams.get("place");
+    if (!pid) return;
+    fetch(`${API}/api/places/${pid}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((p) => {
+        if (!p) return;
+        setPlaceId(p.id);
+        setForm((f) => ({
+          ...f,
+          place_name: p.name,
+          category: p.type,
+          region_id: p.region_id ? String(p.region_id) : f.region_id,
+        }));
+      })
+      .catch(() => {});
+  }, [searchParams]);
+
+  // suggestions while typing the place name
+  useEffect(() => {
+    const q = form.place_name.trim();
+    if (placeId || q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`${API}/api/places/suggest?q=${encodeURIComponent(q)}`)
+        .then((res) => res.json())
+        .then(setSuggestions)
+        .catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [form.place_name, placeId]);
+
+  const choosePlace = (p) => {
+    setPlaceId(p.id);
+    setSuggestions([]);
+    setForm((f) => ({
+      ...f,
+      place_name: p.name,
+      category: p.type,
+      region_id: p.region_id ? String(p.region_id) : f.region_id,
+    }));
+  };
 
   useEffect(() => {
     fetch(`${API}/api/regions`)
@@ -46,7 +98,7 @@ function ShareExperiencePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ ...form, rating }),
+        body: JSON.stringify({ ...form, rating, place_id: placeId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -105,16 +157,39 @@ function ShareExperiencePage() {
           </div>
 
           <div className="row">
-            <div className="col-md-6 mb-3">
+            <div className="col-md-6 mb-3 position-relative">
               <label className="form-label">Place name *</label>
               <input
                 className="form-control"
                 name="place_name"
                 value={form.place_name}
-                onChange={change}
+                onChange={(e) => {
+                  setPlaceId(null); // typing again = not linked anymore
+                  change(e);
+                }}
                 maxLength={150}
+                autoComplete="off"
                 required
               />
+              {placeId && <div className="form-text text-success">✓ This place is on our site</div>}
+              {suggestions.length > 0 && (
+                <div className="list-group position-absolute w-100 shadow" style={{ zIndex: 10 }}>
+                  {suggestions.map((p) => (
+                    <button
+                      type="button"
+                      key={p.id}
+                      className="list-group-item list-group-item-action py-2"
+                      onClick={() => choosePlace(p)}
+                    >
+                      {p.name}
+                      <small className="text-muted text-capitalize">
+                        {" "}
+                        · {p.type} · {p.destination_name || p.area_name}
+                      </small>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="col-md-6 mb-3">
               <label className="form-label">Category *</label>
@@ -179,15 +254,8 @@ function ShareExperiencePage() {
           </div>
 
           <div className="mb-4">
-            <label className="form-label">Photo link (optional)</label>
-            <input
-              className="form-control"
-              name="image_url"
-              value={form.image_url}
-              onChange={change}
-              placeholder="https://..."
-            />
-            <div className="form-text">Photo upload will be added later. For now, paste a link to your photo.</div>
+            <label className="form-label">Photo (optional)</label>
+            <ImageUpload value={form.image_url} onChange={(url) => setForm({ ...form, image_url: url })} />
           </div>
 
           {error && <p className="text-danger">{error}</p>}

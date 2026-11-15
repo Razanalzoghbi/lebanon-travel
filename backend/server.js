@@ -4,6 +4,10 @@ const cors = require("cors");
 const mysql = require("mysql2/promise");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
 
 const app = express();
 app.use(cors());
@@ -163,11 +167,49 @@ app.get("/api/me", requireAuth, async (req, res) => {
 // ---------------------- PLACES + REVIEWS ----------------------
 
 // One place with its images, rating and reviews
+// Place name suggestions for the Share Experience form
+app.get("/api/places/suggest", async (req, res) => {
+  const q = (req.query.q || "").trim().slice(0, 60);
+  if (q.length < 2) return res.json([]);
+  const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+  const [rows] = await db.query(
+    `SELECT p.id, p.name, p.type, d.name AS destination_name, d.region_id, p.area_name
+     FROM places p
+     LEFT JOIN destinations d ON d.id = p.destination_id
+     WHERE p.status = 'approved' AND p.name LIKE ?
+     ORDER BY p.name
+     LIMIT 8`,
+    [like]
+  );
+  res.json(rows);
+});
+
+// Approved experiences of one place (with all their photos)
+app.get("/api/places/:id/experiences", async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT e.id, e.title, e.content, e.rating, e.created_at, u.name AS user_name
+     FROM experiences e
+     JOIN users u ON u.id = e.user_id
+     WHERE e.place_id = ? AND e.status = 'approved'
+     ORDER BY e.created_at DESC
+     LIMIT 20`,
+    [req.params.id]
+  );
+  for (const r of rows) {
+    const [imgs] = await db.query(
+      "SELECT image_url FROM experience_images WHERE experience_id = ? ORDER BY sort_order, id",
+      [r.id]
+    );
+    r.images = imgs.map((i) => i.image_url);
+  }
+  res.json(rows);
+});
+
 app.get("/api/places/:id", async (req, res) => {
   const [rows] = await db.query(
     `SELECT p.id, p.name, p.type, p.description, p.image, p.address, p.phone,
             p.opening_hours, p.price_range, (p.owner_id IS NOT NULL) AS claimed,
-            d.name AS destination_name, d.slug AS destination_slug,
+            d.name AS destination_name, d.slug AS destination_slug, d.region_id,
             pr.avg_rating, pr.review_count
      FROM places p
      LEFT JOIN destinations d ON d.id = p.destination_id
@@ -417,6 +459,8 @@ app.patch("/api/admin/claims/:id", requireAuth, requireRole("admin"), async (req
 app.get("/api/owner/places", requireAuth, requireRole("owner"), async (req, res) => {
   const [rows] = await db.query(
     `SELECT p.id, p.name, p.type, p.image, p.status, d.name AS destination_name, p.area_name,
+            p.destination_id, p.description, p.address, p.phone, p.opening_hours, p.price_range,
+            p.latitude, p.longitude,
             pr.avg_rating, pr.review_count,
             (SELECT COUNT(*) FROM bookings b WHERE b.place_id = p.id AND b.status = 'pending') AS pending_bookings
      FROM places p
@@ -426,8 +470,26 @@ app.get("/api/owner/places", requireAuth, requireRole("owner"), async (req, res)
      ORDER BY p.id DESC`,
     [req.user.id]
   );
+  for (const r of rows) {
+    const [imgs] = await db.query("SELECT image_url FROM place_images WHERE place_id = ? ORDER BY sort_order, id", [r.id]);
+    r.images = imgs.map((i) => i.image_url);
+  }
   res.json(rows);
 });
+
+// Extra photos of a place (the gallery). Replaces the old list.
+function cleanGallery(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((u) => typeof u === "string" && u.length <= 255 && (u.startsWith("/") || /^https?:\/\//.test(u)))
+    .slice(0, 10);
+}
+async function saveGallery(placeId, list) {
+  await db.query("DELETE FROM place_images WHERE place_id = ?", [placeId]);
+  for (let i = 0; i < list.length; i++) {
+    await db.query("INSERT INTO place_images (place_id, image_url, sort_order) VALUES (?, ?, ?)", [placeId, list[i], i + 1]);
+  }
+}
 
 // Add a new place (waits for admin approval)
 app.post("/api/owner/places", requireAuth, requireRole("owner"), async (req, res) => {
@@ -446,7 +508,7 @@ app.post("/api/owner/places", requireAuth, requireRole("owner"), async (req, res
       return res.status(400).json({ message: "Area name, latitude and longitude are required for this location" });
     }
   }
-  await db.query(
+  const [inserted] = await db.query(
     `INSERT INTO places
        (destination_id, owner_id, name, type, description, area_name, address, latitude, longitude,
         phone, opening_hours, price_range, image, status)
@@ -467,7 +529,96 @@ app.post("/api/owner/places", requireAuth, requireRole("owner"), async (req, res
       b.image || null,
     ]
   );
+  await saveGallery(inserted.insertId, cleanGallery(b.images));
   res.status(201).json({ message: "Place sent. It will appear after the admin approves it." });
+});
+
+// Edit one of my places
+// Big changes (name, type, location) send an approved place back to the admin for a new check.
+app.patch("/api/owner/places/:id", requireAuth, requireRole("owner"), async (req, res) => {
+  const [rows] = await db.query("SELECT * FROM places WHERE id = ? AND owner_id = ?", [
+    req.params.id,
+    req.user.id,
+  ]);
+  if (rows.length === 0) return res.status(404).json({ message: "Place not found" });
+  const old = rows[0];
+  const b = req.body;
+
+  if (!b.name || !["restaurant", "cafe", "hotel", "attraction"].includes(b.type)) {
+    return res.status(400).json({ message: "Name and a valid type are required" });
+  }
+  const destinationId = b.destination_id ? parseInt(b.destination_id, 10) : null;
+  let lat = null;
+  let lng = null;
+  let areaName = null;
+  if (!destinationId) {
+    lat = parseFloat(b.latitude);
+    lng = parseFloat(b.longitude);
+    areaName = (b.area_name || "").trim();
+    if (!areaName || isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({ message: "Area name, latitude and longitude are required for this location" });
+    }
+  }
+
+  const name = b.name.trim();
+  const bigChange =
+    name !== old.name ||
+    b.type !== old.type ||
+    (destinationId || null) !== (old.destination_id || null) ||
+    (!destinationId && (areaName !== old.area_name || lat !== Number(old.latitude) || lng !== Number(old.longitude)));
+  const newStatus = old.status === "rejected" || bigChange ? "pending" : old.status;
+
+  await db.query(
+    `UPDATE places SET destination_id = ?, name = ?, type = ?, description = ?, area_name = ?, address = ?,
+            latitude = ?, longitude = ?, phone = ?, opening_hours = ?, price_range = ?, image = ?, status = ?
+     WHERE id = ? AND owner_id = ?`,
+    [
+      destinationId,
+      name,
+      b.type,
+      b.description || null,
+      areaName,
+      b.address || null,
+      lat,
+      lng,
+      b.phone || null,
+      b.opening_hours || null,
+      ["$", "$$", "$$$", "$$$$"].includes(b.price_range) ? b.price_range : null,
+      b.image || null,
+      newStatus,
+      old.id,
+      req.user.id,
+    ]
+  );
+  await saveGallery(old.id, cleanGallery(b.images));
+  res.json({
+    message:
+      newStatus === "pending" && old.status !== "pending"
+        ? "Saved. Because you changed important details, the admin will check the place again."
+        : "Saved.",
+  });
+});
+
+// Delete one of my places (reviews, favorites and old bookings are deleted with it)
+app.delete("/api/owner/places/:id", requireAuth, requireRole("owner"), async (req, res) => {
+  const [rows] = await db.query("SELECT id FROM places WHERE id = ? AND owner_id = ?", [
+    req.params.id,
+    req.user.id,
+  ]);
+  if (rows.length === 0) return res.status(404).json({ message: "Place not found" });
+
+  const [[open]] = await db.query(
+    `SELECT COUNT(*) AS n FROM bookings
+     WHERE place_id = ? AND status IN ('pending', 'confirmed') AND booking_date >= CURDATE()`,
+    [rows[0].id]
+  );
+  if (open.n > 0) {
+    return res.status(400).json({
+      message: `This place still has ${open.n} upcoming booking(s). Reject or complete them first.`,
+    });
+  }
+  await db.query("DELETE FROM places WHERE id = ? AND owner_id = ?", [rows[0].id, req.user.id]);
+  res.json({ message: "Place deleted" });
 });
 
 // Bookings of my places
@@ -598,7 +749,7 @@ app.get("/api/experiences", async (req, res) => {
     params.push(like, like, like, like, like);
   }
   const [rows] = await db.query(
-    `SELECT e.id, e.title, e.place_name, e.category, e.location, e.content, e.rating, e.created_at,
+    `SELECT e.id, e.title, e.place_id, e.place_name, e.category, e.location, e.content, e.rating, e.created_at,
             u.name AS user_name, r.id AS region_id, r.name AS region_name,
             (SELECT i.image_url FROM experience_images i
               WHERE i.experience_id = e.id ORDER BY i.sort_order, i.id LIMIT 1) AS image
@@ -649,10 +800,18 @@ app.post("/api/experiences", requireAuth, async (req, res) => {
   const [region] = await db.query("SELECT id FROM regions WHERE id = ?", [regionId]);
   if (region.length === 0) return res.status(400).json({ message: "Region not found" });
 
+  // optional: link to a place that exists on the site
+  let placeId = null;
+  if (b.place_id) {
+    const [pl] = await db.query("SELECT id FROM places WHERE id = ? AND status = 'approved'", [b.place_id]);
+    if (pl.length === 0) return res.status(400).json({ message: "Place not found" });
+    placeId = pl[0].id;
+  }
+
   const [result] = await db.query(
-    `INSERT INTO experiences (user_id, region_id, title, place_name, category, location, content, rating)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [req.user.id, regionId, title, placeName, b.category, location || null, content, rating]
+    `INSERT INTO experiences (user_id, region_id, place_id, title, place_name, category, location, content, rating)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [req.user.id, regionId, placeId, title, placeName, b.category, location || null, content, rating]
   );
   if (imageUrl) {
     await db.query(
@@ -869,6 +1028,52 @@ app.get("/api/admin/search-logs", requireAuth, requireRole("admin"), async (req,
      LIMIT 10`
   );
   res.json(rows);
+});
+
+// ---------------------- CONTACT MESSAGES ----------------------
+
+// Simple limit: 5 messages per IP every 10 minutes (stops spam)
+const contactHits = new Map();
+
+// Anyone can send a message from the Contact page
+app.post("/api/contact", async (req, res) => {
+  const now = Date.now();
+  const recent = (contactHits.get(req.ip) || []).filter((t) => now - t < 10 * 60 * 1000);
+  if (recent.length >= 5) {
+    return res.status(429).json({ message: "You sent many messages. Please wait a few minutes and try again." });
+  }
+
+  const name = String(req.body.name || "").trim();
+  const email = String(req.body.email || "").trim();
+  const message = String(req.body.message || "").trim();
+  if (!name || !email || !message) {
+    return res.status(400).json({ message: "Name, email and message are required" });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: "Please enter a valid email" });
+  }
+  if (name.length > 100 || email.length > 150 || message.length > 3000) {
+    return res.status(400).json({ message: "Some text is too long" });
+  }
+
+  recent.push(now);
+  contactHits.set(req.ip, recent);
+  await db.query("INSERT INTO contact_messages (name, email, message) VALUES (?, ?, ?)", [name, email, message]);
+  res.status(201).json({ message: "Thank you! We received your message." });
+});
+
+// Admin: read the messages (newest first)
+app.get("/api/admin/messages", requireAuth, requireRole("admin"), async (req, res) => {
+  const [rows] = await db.query(
+    "SELECT id, name, email, message, created_at FROM contact_messages ORDER BY created_at DESC, id DESC LIMIT 100"
+  );
+  res.json(rows);
+});
+
+// Admin: delete a message
+app.delete("/api/admin/messages/:id", requireAuth, requireRole("admin"), async (req, res) => {
+  await db.query("DELETE FROM contact_messages WHERE id = ?", [req.params.id]);
+  res.json({ message: "Deleted" });
 });
 
 // ---------------------- HOME PAGE ----------------------
@@ -1123,6 +1328,35 @@ ${placeLines}`;
   } finally {
     clearTimeout(timer);
   }
+});
+
+// ---------------------- IMAGE UPLOAD ----------------------
+// Photos are saved in backend/uploads and served from /uploads. The database only keeps the link.
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+app.use("/uploads", express.static(UPLOAD_DIR));
+
+const IMAGE_EXT = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" };
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (req, file, cb) =>
+      cb(null, `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${IMAGE_EXT[file.mimetype]}`),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, !!IMAGE_EXT[file.mimetype]),
+});
+
+app.post("/api/upload", requireAuth, (req, res) => {
+  upload.single("file")(req, res, (err) => {
+    if (err) {
+      const big = err.code === "LIMIT_FILE_SIZE";
+      return res.status(400).json({ message: big ? "The photo is too big (max 5 MB)" : "Upload failed" });
+    }
+    if (!req.file) return res.status(400).json({ message: "Please choose a JPG, PNG or WEBP image" });
+    const base = process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
+    res.status(201).json({ url: `${base}/uploads/${req.file.filename}` });
+  });
 });
 
 const PORT = process.env.PORT || 5000;

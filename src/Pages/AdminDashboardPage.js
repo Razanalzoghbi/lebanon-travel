@@ -19,6 +19,7 @@ function AdminDashboardPage() {
   const [newPlaces, setNewPlaces] = useState([]);
   const [experiences, setExperiences] = useState([]);
   const [missedSearches, setMissedSearches] = useState([]);
+  const [messages, setMessages] = useState([]);
 
   const loadPlaces = useCallback(() => {
     fetch(`${API}/api/admin/places`, {
@@ -68,6 +69,23 @@ function AdminDashboardPage() {
       .then(setMissedSearches);
   }, []);
 
+  const loadMessages = useCallback(() => {
+    fetch(`${API}/api/admin/messages`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setMessages);
+  }, []);
+
+  const deleteMessage = async (id) => {
+    if (!window.confirm("Delete this message?")) return;
+    await fetch(`${API}/api/admin/messages/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    loadMessages();
+  };
+
   const loadClaims = useCallback(() => {
     fetch(`${API}/api/admin/claims`, {
       headers: { Authorization: `Bearer ${getToken()}` },
@@ -111,8 +129,9 @@ function AdminDashboardPage() {
       loadPlaces();
       loadExperiences();
       loadMissedSearches();
+      loadMessages();
     }
-  }, [load, loadClaims, loadPlaces, loadExperiences, loadMissedSearches]); // eslint-disable-line
+  }, [load, loadClaims, loadPlaces, loadExperiences, loadMissedSearches, loadMessages]); // eslint-disable-line
 
   const setStatus = async (id, status) => {
     await fetch(`${API}/api/admin/users/${id}/status`, {
@@ -286,6 +305,28 @@ function AdminDashboardPage() {
                 </table>
               </div>
             )}
+
+            <h4 className="mt-5">Contact messages</h4>
+            {messages.length === 0 && <p className="text-muted">No messages yet.</p>}
+            {messages.map((m) => (
+              <div key={m.id} className="card mb-2 shadow-sm">
+                <div className="card-body d-flex justify-content-between align-items-start">
+                  <div>
+                    <strong>{m.name}</strong>{" "}
+                    <a href={`mailto:${m.email}`} className="small">
+                      {m.email}
+                    </a>
+                    <div className="text-muted small">{new Date(m.created_at).toLocaleString()}</div>
+                    <div className="mt-2" style={{ whiteSpace: "pre-wrap" }}>
+                      {m.message}
+                    </div>
+                  </div>
+                  <button className="btn btn-outline-danger btn-sm ms-3" onClick={() => deleteMessage(m.id)}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
 
             <h4 className="mt-5">All users</h4>
             <div className="table-responsive">

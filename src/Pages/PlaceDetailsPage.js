@@ -21,6 +21,7 @@ function PlaceDetailsPage() {
   const user = getUser();
   const [place, setPlace] = useState(null);
   const [error, setError] = useState("");
+  const [experiences, setExperiences] = useState([]);
 
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -74,6 +75,13 @@ function PlaceDetailsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    fetch(`${API}/api/places/${id}/experiences`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setExperiences)
+      .catch(() => {});
+  }, [id]);
 
   const submitReview = async (e) => {
     e.preventDefault();
@@ -241,6 +249,43 @@ function PlaceDetailsPage() {
             </div>
 
             <hr className="my-5" />
+
+            <div className="d-flex justify-content-between align-items-center flex-wrap mb-3">
+              <h3 className="mb-0">Experiences at this place</h3>
+              {user && user.role === "user" && (
+                <Link to={`/share-experience?place=${place.id}`} className="btn btn-outline-success btn-sm rounded-pill">
+                  + Share your experience here
+                </Link>
+              )}
+            </div>
+            {experiences.length === 0 && (
+              <p className="text-muted">No experiences shared about this place yet.</p>
+            )}
+            <div className="row g-3 mb-4">
+              {experiences.map((x) => (
+                <div className="col-md-6" key={x.id}>
+                  <div className="border rounded p-3 bg-white h-100">
+                    <div className="d-flex justify-content-between">
+                      <strong>{x.title}</strong>
+                      {x.rating && <Stars value={x.rating} />}
+                    </div>
+                    <div className="text-muted small mb-2">
+                      by {x.user_name} · {new Date(x.created_at).toLocaleDateString()}
+                    </div>
+                    {x.images.length > 0 && (
+                      <div className="d-flex flex-wrap gap-2 mb-2">
+                        {x.images.map((url) => (
+                          <img key={url} src={url} alt="" style={{ height: 90, borderRadius: 6 }} />
+                        ))}
+                      </div>
+                    )}
+                    <p className="mb-0 small">{x.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <hr className="my-4" />
 
             <h3 className="mb-3">Reviews</h3>
             <div className="row g-4">

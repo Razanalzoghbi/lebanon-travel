@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import ImageUpload from "../components/ImageUpload";
 import { API, getUser, getToken } from "../auth";
 
 const BOOKING_BADGE = {
@@ -23,6 +24,7 @@ const EMPTY = {
   opening_hours: "",
   price_range: "",
   image: "",
+  images: [],
   area_name: "",
   latitude: "",
   longitude: "",
@@ -37,6 +39,7 @@ function OwnerDashboardPage() {
   const [places, setPlaces] = useState([]);
   const [destinations, setDestinations] = useState([]);
   const [form, setForm] = useState(EMPTY);
+  const [editingId, setEditingId] = useState(null); // null = adding a new place
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("success");
 
@@ -75,11 +78,11 @@ function OwnerDashboardPage() {
 
   const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const addPlace = async (e) => {
+  const savePlace = async (e) => {
     e.preventDefault();
     setMsg("");
-    const res = await fetch(`${API}/api/owner/places`, {
-      method: "POST",
+    const res = await fetch(`${API}/api/owner/places${editingId ? `/${editingId}` : ""}`, {
+      method: editingId ? "PATCH" : "POST",
       headers,
       body: JSON.stringify(form),
     });
@@ -88,8 +91,53 @@ function OwnerDashboardPage() {
     setMsg(data.message);
     if (res.ok) {
       setForm(EMPTY);
+      setEditingId(null);
       loadPlaces();
+      setTab("places");
     }
+  };
+
+  const startEdit = (p) => {
+    setForm({
+      name: p.name || "",
+      type: p.type || "restaurant",
+      destination_id: p.destination_id ? String(p.destination_id) : "",
+      description: p.description || "",
+      address: p.address || "",
+      phone: p.phone || "",
+      opening_hours: p.opening_hours || "",
+      price_range: p.price_range || "",
+      image: p.image || "",
+      images: p.images || [],
+      area_name: p.area_name || "",
+      latitude: p.latitude ?? "",
+      longitude: p.longitude ?? "",
+    });
+    setEditingId(p.id);
+    setMsg("");
+    setTab("add");
+  };
+
+  const cancelEdit = () => {
+    setForm(EMPTY);
+    setEditingId(null);
+    setMsg("");
+    setTab("places");
+  };
+
+  const deletePlace = async (p) => {
+    if (!window.confirm(`Delete "${p.name}"? Its reviews and favorites will be deleted too. This cannot be undone.`)) {
+      return;
+    }
+    const res = await fetch(`${API}/api/owner/places/${p.id}`, { method: "DELETE", headers });
+    const data = await res.json();
+    if (!res.ok) {
+      window.alert(data.message);
+      return;
+    }
+    setMsgType("success");
+    setMsg(data.message);
+    loadPlaces();
   };
 
   if (!user || user.role !== "owner") {
@@ -114,14 +162,25 @@ function OwnerDashboardPage() {
       <div className="container mt-5 mb-5" style={{ minHeight: "65vh" }}>
         <h1 className="fw-bold text-center mb-4">Owner Dashboard</h1>
 
-        <ul className="nav nav-pills justify-content-center mb-4">
+        <style>{`
+          .owner-tabs .nav-link { color: #0d6efd !important; background: transparent !important; }
+          .owner-tabs .nav-link:hover { color: #0a58ca !important; background: #e7f0ff !important; }
+          .owner-tabs .nav-link.active, .owner-tabs .nav-link.active:hover { color: #fff !important; background: #0d6efd !important; }
+        `}</style>
+        <ul className="nav nav-pills justify-content-center mb-4 owner-tabs">
           {[
             ["bookings", `Bookings${pendingCount ? ` (${pendingCount})` : ""}`],
             ["places", "My places"],
-            ["add", "Add a place"],
+            ["add", editingId ? "Edit place" : "Add a place"],
           ].map(([key, label]) => (
             <li className="nav-item" key={key}>
-              <button className={`nav-link ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
+              <button
+                className={`nav-link ${tab === key ? "active" : ""}`}
+                onClick={() => {
+                  if (key === "add" && tab !== "add" && !editingId) setForm(EMPTY);
+                  setTab(key);
+                }}
+              >
                 {label}
               </button>
             </li>
@@ -175,6 +234,7 @@ function OwnerDashboardPage() {
 
         {tab === "places" && (
           <>
+            {msg && tab === "places" && <div className={`alert alert-${msgType}`}>{msg}</div>}
             {places.length === 0 && (
               <p className="text-center text-muted">
                 You have no places yet. Add a new one, or open an existing place and press "Claim this business".
@@ -206,6 +266,14 @@ function OwnerDashboardPage() {
                         {p.review_count > 0 ? `★ ${p.avg_rating} (${p.review_count})` : "No reviews yet"}
                         {p.pending_bookings > 0 && ` · ${p.pending_bookings} pending bookings`}
                       </div>
+                      <div className="mt-3">
+                        <button className="btn btn-outline-primary btn-sm me-2" onClick={() => startEdit(p)}>
+                          Edit
+                        </button>
+                        <button className="btn btn-outline-danger btn-sm" onClick={() => deletePlace(p)}>
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -215,7 +283,8 @@ function OwnerDashboardPage() {
         )}
 
         {tab === "add" && (
-          <form onSubmit={addPlace} className="mx-auto p-4 border rounded shadow-sm bg-white" style={{ maxWidth: "600px" }}>
+          <form onSubmit={savePlace} className="mx-auto p-4 border rounded shadow-sm bg-white" style={{ maxWidth: "600px" }}>
+            {editingId && <h5 className="mb-3">Edit place</h5>}
             {msg && <div className={`alert alert-${msgType}`}>{msg}</div>}
 
             <div className="row">
@@ -297,13 +366,43 @@ function OwnerDashboardPage() {
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Image link (URL)</label>
-              <input name="image" className="form-control" placeholder="https://..." value={form.image} onChange={change} />
+              <label className="form-label">Main photo</label>
+              <ImageUpload value={form.image} onChange={(url) => setForm({ ...form, image: url })} />
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label">More photos (optional)</label>
+              {form.images.length > 0 && (
+                <div className="d-flex flex-wrap gap-2 mb-2">
+                  {form.images.map((url, i) => (
+                    <div key={url + i} className="position-relative">
+                      <img src={url} alt="" style={{ width: 90, height: 70, objectFit: "cover", borderRadius: 6 }} />
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm position-absolute top-0 end-0 py-0 px-1"
+                        style={{ lineHeight: 1.2 }}
+                        onClick={() => setForm({ ...form, images: form.images.filter((_, j) => j !== i) })}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {form.images.length < 10 && (
+                <ImageUpload value="" onChange={(url) => url && setForm({ ...form, images: [...form.images, url] })} />
+              )}
+              <div className="form-text">These photos show under the main photo on the place page.</div>
             </div>
 
             <button type="submit" className="btn custom-btn w-100">
-              Send for approval
+              {editingId ? "Save changes" : "Send for approval"}
             </button>
+            {editingId && (
+              <button type="button" className="btn btn-link w-100 mt-2" onClick={cancelEdit}>
+                Cancel
+              </button>
+            )}
           </form>
         )}
       </div>

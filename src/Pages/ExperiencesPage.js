@@ -204,7 +204,8 @@ function ExperiencesPage() {
                     <p className="small mb-2">{open ? e.content : short}</p>
                     {open && (
                       <div className="small text-muted mb-2">
-                        <span className="text-capitalize">{e.category}</span>: {e.place_name}
+                        <span className="text-capitalize">{e.category}</span>:{" "}
+                        {e.place_id ? <Link to={`/places/${e.place_id}`}>{e.place_name}</Link> : e.place_name}
                         {e.location && ` · ${e.location}`}
                       </div>
                     )}

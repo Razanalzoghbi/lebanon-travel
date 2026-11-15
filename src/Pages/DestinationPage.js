@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import FavoriteButton from "../components/FavoriteButton";
 import PlaceImage from "../components/PlaceImage";
+import NotFoundPage from "./NotFoundPage";
 
 const API = "http://localhost:5000";
 
@@ -30,6 +31,9 @@ function DestinationPage() {
       .then((data) => setDest(data))
       .catch((err) => setError(err.message));
   }, [slug]);
+
+  // /anything-unknown also arrives here (the /:slug route), so show the 404 page
+  if (error === "Destination not found") return <NotFoundPage />;
 
   return (
     <div>
