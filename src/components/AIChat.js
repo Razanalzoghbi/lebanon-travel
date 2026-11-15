@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { API } from "../auth";
+import { API, getUser } from "../auth";
 
 const WELCOME = {
   role: "assistant",
@@ -15,13 +15,40 @@ const QUICK = [
   "Where can I go for snow?",
 ];
 
+// Each account has its own saved chat in this browser (visitors share one "guest" chat)
+const MAX_SAVED = 40;
+function chatKey() {
+  const u = getUser();
+  return `ai_chat_${u ? (u.id ?? u.email) : "guest"}`;
+}
+
 function AIChat() {
   const location = useLocation();
+  const key = chatKey();
+  const [loadedKey, setLoadedKey] = useState(null);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([WELCOME]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+
+  // load the saved chat of the current account (also when someone logs in or out)
+  useEffect(() => {
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(key));
+    } catch (e) {}
+    setMessages(Array.isArray(saved) && saved.length > 0 ? saved : [WELCOME]);
+    setLoadedKey(key);
+  }, [key]);
+
+  // save after every change
+  useEffect(() => {
+    if (loadedKey !== key) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(messages.slice(-MAX_SAVED)));
+    } catch (e) {}
+  }, [messages, loadedKey, key]);
 
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: "smooth" });
@@ -79,9 +106,24 @@ function AIChat() {
               <strong>Lebanon Travel AI</strong>
               <div style={{ fontSize: "0.75rem", opacity: 0.85 }}>Ask me about your trip</div>
             </div>
-            <button className="btn btn-sm text-white" onClick={() => setOpen(false)} aria-label="Close chat">
-              ✕
-            </button>
+            <div>
+              {messages.length > 1 && (
+                <button
+                  className="btn btn-sm text-white"
+                  style={{ fontSize: "0.8rem" }}
+                  onClick={() => {
+                    if (window.confirm("Start a new chat? The current conversation will be deleted.")) {
+                      setMessages([WELCOME]);
+                    }
+                  }}
+                >
+                  New chat
+                </button>
+              )}
+              <button className="btn btn-sm text-white" onClick={() => setOpen(false)} aria-label="Close chat">
+                ✕
+              </button>
+            </div>
           </div>
 
           <div className="flex-grow-1 p-3" style={{ overflowY: "auto", background: "#f4f6f9" }}>
