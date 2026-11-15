@@ -218,6 +218,7 @@ app.get("/api/places/:id", async (req, res) => {
     `SELECT p.id, p.name, p.type, p.description, p.image, p.address, p.phone,
             p.opening_hours, p.price_range, p.latitude, p.longitude, (p.owner_id IS NOT NULL) AS claimed,
             d.name AS destination_name, d.slug AS destination_slug, d.region_id,
+            d.latitude AS dest_latitude, d.longitude AS dest_longitude,
             pr.avg_rating, pr.review_count
      FROM places p
      LEFT JOIN destinations d ON d.id = p.destination_id
@@ -1077,7 +1078,7 @@ app.post("/api/contact", async (req, res) => {
     });
     mailer
       .sendMail({
-        from: `"${name} via Lebanon Travel" <${process.env.MAIL_USER}>`,
+        from: `"Lebanon Travel" <${process.env.MAIL_USER}>`,
         to: process.env.MAIL_TO || process.env.MAIL_USER,
         replyTo: email,
         subject: `New contact message from ${name.replace(/[\r\n]+/g, " ")}`,

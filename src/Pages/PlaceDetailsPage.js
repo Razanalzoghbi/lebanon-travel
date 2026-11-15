@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import FavoriteButton from "../components/FavoriteButton";
+import PlaceMap from "../components/PlaceMap";
 import { API, getUser, getToken } from "../auth";
 
 function Stars({ value }) {
@@ -208,6 +209,13 @@ function PlaceDetailsPage() {
                     ))}
                   </div>
                 )}
+
+                <PlaceMap
+                  lat={place.latitude ?? place.dest_latitude}
+                  lng={place.longitude ?? place.dest_longitude}
+                  name={place.name}
+                  approximate={place.latitude == null || place.longitude == null}
+                />
               </div>
 
               <div className="col-lg-5">
