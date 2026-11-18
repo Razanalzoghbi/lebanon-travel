@@ -791,6 +791,14 @@ app.get("/api/experiences", async (req, res) => {
      ORDER BY e.created_at DESC`,
     params
   );
+  // attach all photos of each experience (first one is still in "image")
+  if (rows.length > 0) {
+    const [imgs] = await db.query(
+      "SELECT experience_id, image_url FROM experience_images WHERE experience_id IN (?) ORDER BY sort_order, id",
+      [rows.map((r) => r.id)]
+    );
+    for (const r of rows) r.images = imgs.filter((i) => i.experience_id === r.id).map((i) => i.image_url);
+  }
   res.json(rows);
 });
 
@@ -805,7 +813,9 @@ app.post("/api/experiences", requireAuth, async (req, res) => {
   const placeName = (b.place_name || "").trim();
   const content = (b.content || "").trim();
   const location = (b.location || "").trim();
-  const imageUrl = (b.image_url || "").trim();
+  // photos: new form sends "images" (array); the old single "image_url" still works
+  let photos = Array.isArray(b.images) ? b.images : b.image_url ? [b.image_url] : [];
+  photos = photos.filter((u) => typeof u === "string" && u.trim()).map((u) => u.trim());
 
   if (!regionId || !title || !placeName || !content) {
     return res.status(400).json({ message: "Title, place name, region and your experience are required" });
@@ -824,8 +834,11 @@ app.post("/api/experiences", requireAuth, async (req, res) => {
       return res.status(400).json({ message: "Rating must be from 1 to 5" });
     }
   }
-  if (imageUrl && (!/^https?:\/\//i.test(imageUrl) || imageUrl.length > 255)) {
-    return res.status(400).json({ message: "Photo link must start with http:// or https://" });
+  if (photos.length > 5) {
+    return res.status(400).json({ message: "You can add up to 5 photos" });
+  }
+  if (photos.some((u) => !(u.startsWith("/") || /^https?:\/\//i.test(u)) || u.length > 255)) {
+    return res.status(400).json({ message: "Photo link is not valid" });
   }
 
   const [region] = await db.query("SELECT id FROM regions WHERE id = ?", [regionId]);
@@ -844,10 +857,10 @@ app.post("/api/experiences", requireAuth, async (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [req.user.id, regionId, placeId, title, placeName, b.category, location || null, content, rating]
   );
-  if (imageUrl) {
+  for (let i = 0; i < photos.length; i++) {
     await db.query(
-      "INSERT INTO experience_images (experience_id, image_url, sort_order) VALUES (?, ?, 0)",
-      [result.insertId, imageUrl]
+      "INSERT INTO experience_images (experience_id, image_url, sort_order) VALUES (?, ?, ?)",
+      [result.insertId, photos[i], i]
     );
   }
   res.status(201).json({ message: "Thank you! Your experience will appear after the admin approves it." });

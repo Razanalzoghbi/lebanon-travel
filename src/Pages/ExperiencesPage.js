@@ -178,6 +178,11 @@ function ExperiencesPage() {
                         No photo
                       </div>
                     )}
+                    {e.images && e.images.length > 1 && (
+                      <span className="badge bg-dark" style={{ position: "absolute", left: 10, top: 10 }}>
+                        📷 {e.images.length}
+                      </span>
+                    )}
                     <span
                       className="badge rounded-pill"
                       style={{
@@ -202,6 +207,15 @@ function ExperiencesPage() {
                       by {e.user_name} | {new Date(e.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
                     </div>
                     <p className="small mb-2">{open ? e.content : short}</p>
+                    {open && e.images && e.images.length > 1 && (
+                      <div className="d-flex flex-wrap gap-2 mb-2">
+                        {e.images.map((url, i) => (
+                          <a key={url + i} href={url} target="_blank" rel="noreferrer">
+                            <img src={url} alt={`${e.title} ${i + 1}`} style={{ height: 60, width: 80, objectFit: "cover", borderRadius: 6 }} />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     {open && (
                       <div className="small text-muted mb-2">
                         <span className="text-capitalize">{e.category}</span>:{" "}

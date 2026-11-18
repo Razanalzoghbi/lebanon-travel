@@ -5,6 +5,8 @@ import Footer from "../components/Footer";
 import ImageUpload from "../components/ImageUpload";
 import { API, getUser, getToken } from "../auth";
 
+const MAX_PHOTOS = 5;
+
 function ShareExperiencePage() {
   const user = getUser();
   const [regions, setRegions] = useState([]);
@@ -15,8 +17,8 @@ function ShareExperiencePage() {
     region_id: "",
     location: "",
     content: "",
-    image_url: "",
   });
+  const [images, setImages] = useState([]); // up to MAX_PHOTOS photo links
   const [rating, setRating] = useState(0); // 0 = no rating (optional)
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
@@ -98,7 +100,7 @@ function ShareExperiencePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ ...form, rating, place_id: placeId }),
+        body: JSON.stringify({ ...form, images, rating, place_id: placeId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -254,8 +256,43 @@ function ShareExperiencePage() {
           </div>
 
           <div className="mb-4">
-            <label className="form-label">Photo (optional)</label>
-            <ImageUpload value={form.image_url} onChange={(url) => setForm({ ...form, image_url: url })} />
+            <label className="form-label">
+              Photos (optional, up to {MAX_PHOTOS}) <span className="text-muted small">{images.length}/{MAX_PHOTOS}</span>
+            </label>
+            {images.length > 0 && (
+              <div className="d-flex flex-wrap gap-2 mb-2">
+                {images.map((url, i) => (
+                  <div key={url + i} style={{ position: "relative" }}>
+                    <img
+                      src={url}
+                      alt={`Preview ${i + 1}`}
+                      style={{ height: 90, width: 120, objectFit: "cover", borderRadius: 8 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      style={{ position: "absolute", top: 4, right: 4, padding: "0 6px", lineHeight: 1.4 }}
+                      title="Remove photo"
+                      onClick={() => setImages(images.filter((_, k) => k !== i))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {images.length < MAX_PHOTOS ? (
+              <ImageUpload
+                key={images.length /* resets the file box after each upload */}
+                value=""
+                onChange={(url) => url && setImages([...images, url])}
+              />
+            ) : (
+              <div className="form-text">You reached the maximum of {MAX_PHOTOS} photos.</div>
+            )}
+            {images.length > 0 && images.length < MAX_PHOTOS && (
+              <div className="form-text">Choose another photo to add more.</div>
+            )}
           </div>
 
           {error && <p className="text-danger">{error}</p>}
