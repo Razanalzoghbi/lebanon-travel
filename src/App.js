@@ -9,6 +9,7 @@ import LoginPage from "./Pages/LoginPage";
 import RegisterPage from "./Pages/RegisterPage";
 import PlaceDetailsPage from "./Pages/PlaceDetailsPage";
 import MyBookingsPage from "./Pages/MyBookingsPage";
+import MyReviewsPage from "./Pages/MyReviewsPage";
 import AdminDashboardPage from "./Pages/AdminDashboardPage";
 import OwnerDashboardPage from "./Pages/OwnerDashboardPage";
 import NearbyPage from "./Pages/NearbyPage";
@@ -55,6 +56,7 @@ function App() {
          <Route path="/register" element={<RegisterPage />} />
          <Route path="/places/:id" element={<PlaceDetailsPage />} />
          <Route path="/my-bookings" element={<MyBookingsPage />} />
+         <Route path="/my-reviews" element={<MyReviewsPage />} />
          <Route path="/admin" element={<AdminDashboardPage/>} />
          <Route path="/owner" element={<OwnerDashboardPage />} />
          <Route path="/nearby/:slug" element={<NearbyPage />} />

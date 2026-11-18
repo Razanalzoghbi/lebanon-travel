@@ -87,6 +87,11 @@ function Navbar() {
                           </Link>
                         </li>
                         <li>
+                          <Link className="dropdown-item" to="/my-reviews" onClick={() => setMenuOpen(false)}>
+                            My Reviews
+                          </Link>
+                        </li>
+                        <li>
                           <Link className="dropdown-item" to="/favorites" onClick={() => setMenuOpen(false)}>
                             My Favorites
                           </Link>

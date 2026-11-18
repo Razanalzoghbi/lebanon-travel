@@ -20,6 +20,7 @@ function AdminDashboardPage() {
   const [experiences, setExperiences] = useState([]);
   const [missedSearches, setMissedSearches] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [reviews, setReviews] = useState([]);
 
   const loadPlaces = useCallback(() => {
     fetch(`${API}/api/admin/places`, {
@@ -86,6 +87,26 @@ function AdminDashboardPage() {
     loadMessages();
   };
 
+  const loadReviews = useCallback(() => {
+    fetch(`${API}/api/admin/reviews`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setReviews);
+  }, []);
+
+  const setReviewStatus = async (id, status) => {
+    await fetch(`${API}/api/admin/reviews/${id}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    loadReviews();
+  };
+
   const loadClaims = useCallback(() => {
     fetch(`${API}/api/admin/claims`, {
       headers: { Authorization: `Bearer ${getToken()}` },
@@ -130,8 +151,9 @@ function AdminDashboardPage() {
       loadExperiences();
       loadMissedSearches();
       loadMessages();
+      loadReviews();
     }
-  }, [load, loadClaims, loadPlaces, loadExperiences, loadMissedSearches, loadMessages]); // eslint-disable-line
+  }, [load, loadClaims, loadPlaces, loadExperiences, loadMissedSearches, loadMessages, loadReviews]); // eslint-disable-line
 
   const setStatus = async (id, status) => {
     await fetch(`${API}/api/admin/users/${id}/status`, {
@@ -324,6 +346,40 @@ function AdminDashboardPage() {
                   <button className="btn btn-outline-danger btn-sm ms-3" onClick={() => deleteMessage(m.id)}>
                     Delete
                   </button>
+                </div>
+              </div>
+            ))}
+
+            <h4 className="mt-5">Reviews ({reviews.length})</h4>
+            <p className="text-muted small">Hide a review that is rude or fake. It stays in the database but visitors will not see it and it will not count in the rating.</p>
+            {reviews.length === 0 && <p className="text-muted">No reviews yet.</p>}
+            {reviews.map((r) => (
+              <div key={r.id} className={`card mb-2 shadow-sm ${r.status === "hidden" ? "bg-light" : ""}`}>
+                <div className="card-body d-flex justify-content-between align-items-start">
+                  <div style={r.status === "hidden" ? { opacity: 0.6 } : undefined}>
+                    <strong>{r.user_name}</strong> on{" "}
+                    <a href={`/places/${r.place_id}`} target="_blank" rel="noreferrer">
+                      {r.place_name}
+                    </a>{" "}
+                    <span style={{ color: "#f5a623" }}>{"★".repeat(r.rating)}</span>
+                    <span className="text-muted">{"★".repeat(5 - r.rating)}</span>
+                    {r.status === "hidden" && <span className="badge bg-secondary ms-2">Hidden</span>}
+                    <div className="text-muted small">{new Date(r.created_at).toLocaleString()}</div>
+                    {r.comment && (
+                      <div className="mt-2" style={{ whiteSpace: "pre-wrap" }}>
+                        {r.comment}
+                      </div>
+                    )}
+                  </div>
+                  {r.status === "hidden" ? (
+                    <button className="btn btn-outline-success btn-sm ms-3" onClick={() => setReviewStatus(r.id, "visible")}>
+                      Show
+                    </button>
+                  ) : (
+                    <button className="btn btn-outline-danger btn-sm ms-3" onClick={() => setReviewStatus(r.id, "hidden")}>
+                      Hide
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

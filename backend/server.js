@@ -236,7 +236,7 @@ app.get("/api/places/:id", async (req, res) => {
     `SELECT r.id, r.rating, r.comment, r.created_at, u.name AS user_name
      FROM reviews r
      JOIN users u ON u.id = r.user_id
-     WHERE r.place_id = ?
+     WHERE r.place_id = ? AND r.status = 'visible'
      ORDER BY r.created_at DESC`,
     [req.params.id]
   );
@@ -268,6 +268,28 @@ app.post("/api/places/:id/reviews", requireAuth, async (req, res) => {
     [req.user.id, req.params.id, rating, comment || null]
   );
   res.status(201).json({ message: "Thank you for your review!" });
+});
+
+
+// My reviews (all the reviews I wrote, hidden ones included so I know)
+app.get("/api/reviews/mine", requireAuth, async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT r.id, r.rating, r.comment, r.status, r.created_at,
+            p.id AS place_id, p.name AS place_name, p.type AS place_type
+     FROM reviews r
+     JOIN places p ON p.id = r.place_id
+     WHERE r.user_id = ?
+     ORDER BY r.created_at DESC, r.id DESC`,
+    [req.user.id]
+  );
+  res.json(rows);
+});
+
+// Delete one of my reviews
+app.delete("/api/reviews/:id", requireAuth, async (req, res) => {
+  const [result] = await db.query("DELETE FROM reviews WHERE id = ? AND user_id = ?", [req.params.id, req.user.id]);
+  if (result.affectedRows === 0) return res.status(404).json({ message: "Review not found" });
+  res.json({ message: "Review deleted" });
 });
 
 
@@ -1100,6 +1122,33 @@ app.get("/api/admin/messages", requireAuth, requireRole("admin"), async (req, re
 app.delete("/api/admin/messages/:id", requireAuth, requireRole("admin"), async (req, res) => {
   await db.query("DELETE FROM contact_messages WHERE id = ?", [req.params.id]);
   res.json({ message: "Deleted" });
+});
+
+// ---------------------- ADMIN: HIDE / SHOW REVIEWS ----------------------
+
+// Admin: latest reviews (visible and hidden)
+app.get("/api/admin/reviews", requireAuth, requireRole("admin"), async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT r.id, r.rating, r.comment, r.status, r.created_at,
+            u.name AS user_name, p.id AS place_id, p.name AS place_name
+     FROM reviews r
+     JOIN users u ON u.id = r.user_id
+     JOIN places p ON p.id = r.place_id
+     ORDER BY r.created_at DESC, r.id DESC
+     LIMIT 100`
+  );
+  res.json(rows);
+});
+
+// Admin: hide or show one review
+app.patch("/api/admin/reviews/:id/status", requireAuth, requireRole("admin"), async (req, res) => {
+  const status = req.body.status;
+  if (!["visible", "hidden"].includes(status)) {
+    return res.status(400).json({ message: "Status must be visible or hidden" });
+  }
+  const [result] = await db.query("UPDATE reviews SET status = ? WHERE id = ?", [status, req.params.id]);
+  if (result.affectedRows === 0) return res.status(404).json({ message: "Review not found" });
+  res.json({ message: status === "hidden" ? "Review hidden" : "Review visible again" });
 });
 
 // ---------------------- HOME PAGE ----------------------
